@@ -47,7 +47,7 @@ switch ($_REQUEST["action"]) {
 	case 'plday':
 		include_once("./include/header.php");
 
-		show_plday();
+		pl_day_show();
 
 		include_once("./include/footer.php");
 		break;
@@ -307,18 +307,21 @@ function show_plsubj()
 
 	//-----------
 	show_agend($PL_AGEND_ID);
-	show_excl($PL_SUBJ_ID);
+	pl_excl_show($PL_SUBJ_ID);
 	
 	print("<p>today</p>");
 	
 	$date=date("Ymd");
-	show_agend2($PL_AGEND_ID,$date);
-	show_excl($PL_SUBJ_ID, $date);
+	
+	pl_agend_show($PL_AGEND_ID, $date);
+	//pl_day_show_array(pl_day_get_array($PL_DAY_ID, date));
+	
+	pl_excl_show($PL_SUBJ_ID, $date);
 	show_planning($PL_SUBJ_ID, $date);
 
 }
 
-function get_medialog_pl_day_message($row)
+function pl_day_get_message($row)
 {
 	/*"DAY_EVEN, DAY_MONTH, DAY_OF_MONTH, DAY_OF_WEEK, DAY_ORDER, DAY_WEEK, DAY_WEEK_MONTH, DAY_YEAR, PERIOD_FROM, PERIOD_TO"
 	 * 
@@ -525,7 +528,7 @@ function show_agend($PL_AGEND_ID, $date="")
 			print "<td>".$row['DAY_EVEN']."</td><td>".$row['DAY_MONTH']."</td><td>".$row['DAY_OF_MONTH']."</td><td>".$row['DAY_OF_WEEK']."</td>";
 			print "<td>".$row['DAY_WEEK']."</td><td>".$row['DAY_WEEK_MONTH']."</td><td>".$row['DAY_YEAR']."</td>";
 			print "<td>".$row['PERIOD_FROM']."</td><td>".$row['PERIOD_TO']."</td>";
-			$msg=get_medialog_pl_day_message($row);
+			$msg=pl_day_get_message($row);
 			print "<td>".$msg."</td>";
 			print "</tr> \n";
 		}
@@ -539,7 +542,27 @@ function show_agend($PL_AGEND_ID, $date="")
 	}
 }
 
-function show_agend2($PL_AGEND_ID, $date="")
+function pl_agend_show($PL_AGEND_ID, $date="")
+{
+	/* ================= input validation ================= */
+	input_validate_input_number($PL_AGEND_ID);
+	input_validate_input_date($date);	
+	/* ==================================================== */
+
+	$arr = pl_agend_get_array($PL_AGEND_ID,$date);
+
+	if (sizeof($arr) > 0)
+	{
+		pl_agend_show_array($arr);
+	}
+	else
+	{
+		print "<br>Нет доступа к сеткам расписаниям<br>";
+	}
+}
+
+//TODO
+function pl_day_get_id_by_pl_agend_id($PL_AGEND_ID, $date="")
 {
 	/* ================= input validation ================= */
 	input_validate_input_number($PL_AGEND_ID);
@@ -581,8 +604,72 @@ function show_agend2($PL_AGEND_ID, $date="")
 
 	$arr = db_fetch_assoc($tsql);
 	
-	$PL_DAY_ID=0;
+	
 
+	if (sizeof($arr) > 0)
+	{
+		return $arr;
+	}
+	else
+	{
+		return 0;
+	}	
+}
+
+function pl_agend_get_array($PL_AGEND_ID, $date="")
+{
+	/* ================= input validation ================= */
+	input_validate_input_number($PL_AGEND_ID);
+	input_validate_input_date($date);	
+	/* ==================================================== */
+
+	$tsql="SET DATEFIRST 1
+	 declare @date datetime
+	 set @date='".$date."'
+
+	 SELECT top 1
+	 PL_DAY.PL_DAY_ID, PL_DAY.NAME
+	 ,PL_DAY.START_TIME, PL_DAY.END_TIME 
+	 ,DAY_EVEN, DAY_MONTH, DAY_OF_MONTH, DAY_OF_WEEK, DAY_ORDER, DAY_WEEK, DAY_WEEK_MONTH, DAY_YEAR
+	 ,PERIOD_FROM, PERIOD_TO
+	 ,DUREE_TRANCHE 
+	 FROM pl_day 
+	 WHERE 
+	 PL_DAY.ENABLED=1 
+	 and pl_agend_id in (".$PL_AGEND_ID.") 
+	 and (PERIOD_FROM is null or PERIOD_FROM <= @date)						/* День активен с */
+	 and (PERIOD_TO is null or PERIOD_TO >= @date)							/* День активен по */
+	 and (isnull(DAY_MONTH,0)=0 or DAY_MONTH=month(@date))							/* Месяц */
+	 and (isnull(DAY_MONTH,0)=0 or DAY_MONTH=month(@date))
+	 and (isnull(DAY_OF_MONTH,0)=0 or DAY_OF_MONTH = day(@date))					/* День месяца */
+	 and (isnull(DAY_YEAR,0)=0 or DAY_YEAR = (year(@date)-1995)/* magic year*/)		/* Год */
+	 and (isnull(DAY_EVEN,0)=0 or DAY_EVEN=(day(@date)& 1 + 1))						/* Признак четности, нечетный 2, четный 1 */
+	 and (isnull(DAY_WEEK,0)=0 or DAY_WEEK=(
+		 DATEPART(week,@date)-DATEPART(week,DATEADD(day,1-day(@date),@date))+1))		/* Номер недели в месяце */
+	 and (isnull(DAY_OF_WEEK,0)=0 
+			or (DAY_OF_WEEK=DATEPART(weekday,@date) and isnull(DAY_WEEK_MONTH,0)=0)	/* Номер дня в неделе */
+			or (DAY_OF_WEEK=DATEPART(weekday,@date) and DAY_WEEK_MONTH=DATEDIFF(day,DATEADD(day,1-day(@date),@date),@date)/7+1))
+					/* i-тый день недели в месяце */
+	 and (case when(isnull(INTERVAL_WORK,0)=0 and isnull(INTERVAL_OFF,0)=0) then 1 else (
+			case when (DATEDIFF(day,INTERVAL_STARTFROM,@date))%(INTERVAL_WORK+INTERVAL_OFF)<=(INTERVAL_WORK-1)then 1 else 0 end
+		 ) end)=1
+	 ORDER BY day_order
+	";
+
+	$arr = db_fetch_assoc($tsql);
+
+	if (sizeof($arr) > 0)
+	{
+		return $arr;
+	}
+	else
+	{
+		return null;
+	}	
+}
+
+function pl_agend_show_array($arr)
+{
 	if (sizeof($arr) > 0)
 	{
 
@@ -614,7 +701,7 @@ function show_agend2($PL_AGEND_ID, $date="")
 			print "<td>".$row['DAY_EVEN']."</td><td>".$row['DAY_MONTH']."</td><td>".$row['DAY_OF_MONTH']."</td><td>".$row['DAY_OF_WEEK']."</td>";
 			print "<td>".$row['DAY_WEEK']."</td><td>".$row['DAY_WEEK_MONTH']."</td><td>".$row['DAY_YEAR']."</td>";
 			print "<td>".$row['PERIOD_FROM']."</td><td>".$row['PERIOD_TO']."</td>";
-			$msg=get_medialog_pl_day_message($row);
+			$msg=pl_day_get_message($row);
 			print "<td>".$msg."</td>";
 			print "</tr> \n";
 		}
@@ -622,16 +709,31 @@ function show_agend2($PL_AGEND_ID, $date="")
 		print "	</tbody>
 	</table>";
 
-	}else
-	{
-		print "<tr><td><em>Нет доступа к сеткам расписаниям</em></td></tr>";
-	}
-	return $PL_DAY_ID;
-	
+	}	
 }
 
 
-function show_excl($PL_SUBJ_ID, $date="")
+function pl_excl_show($PL_SUBJ_ID, $date="")
+{
+
+	/* ================= input validation ================= */
+	input_validate_input_number($PL_SUBJ_ID);
+	if(strlen($date)>0) input_validate_input_date($date);
+	/* ==================================================== */
+
+	$arr = pl_excl_get_array($PL_SUBJ_ID, $date);
+
+	if (sizeof($arr) > 0)
+	{
+		pl_excl_show_array($arr);
+		
+	}else
+	{
+		print "<tr><td><em>Нет доступа к исключительным событиям расписания</em></td></tr>";
+	}
+}
+
+function pl_excl_get_array($PL_SUBJ_ID, $date="")
 {
 
 	/* ================= input validation ================= */
@@ -660,6 +762,18 @@ function show_excl($PL_SUBJ_ID, $date="")
 
 	if (sizeof($arr) > 0)
 	{
+		return $arr;
+	}
+	else
+	{
+		return null;
+	}
+}
+
+function pl_excl_show_array($arr)
+{
+	if (sizeof($arr) > 0)
+	{
 
 		print '<table cellspacing="0" cellpadding="1" border="1" align="center"
 	width="100%">
@@ -678,9 +792,7 @@ function show_excl($PL_SUBJ_ID, $date="")
 			print "<td>";
 			print $row['PL_EXCL_ID'];
 			print "</td><td>";
-			//print "<a href=\"planning.php?action=plday&id=".$row['PL_DAY_ID']."\">";
 			print $row['NAME'];
-			//print "</a>";
 			print "</td>";
 			print "<td>".parse_time($row['FROM_TIME'])."</td><td>".parse_time($row['TO_TIME'])."</td>";
 			print "<td>".$row['FROM_DATE']."</td><td>".$row['TO_DATE']."</td>";
@@ -691,13 +803,10 @@ function show_excl($PL_SUBJ_ID, $date="")
 		print "	</tbody>
 	</table>";
 
-	}else
-	{
-		print "<tr><td><em>Нет доступа к исключительным событиям расписания</em></td></tr>";
 	}
 }
 
-function show_plday($PL_DAY_ID= "")
+function pl_day_show()
 {
 	print '<p>Список событий дня сетки расписания:</p>';
 	/* ================= input validation ================= */
@@ -735,6 +844,24 @@ function show_plday($PL_DAY_ID= "")
 
 	//-----------	
 
+	$arr = pl_day_get_array($PL_DAY_ID);
+
+	if (sizeof($arr) > 0)
+	{
+		pl_day_show_array($arr);
+	}
+	else
+	{
+		print "<tr><td><em>Нет доступа к событиям дня сетки расписания</em></td></tr>";
+	}
+}
+
+function pl_day_get_array($PL_DAY_ID)
+{
+	/* ================= input validation ================= */
+	input_validate_input_number($PL_DAY_ID);
+	/* ==================================================== */
+
 	$tsql="SELECT ".
 	"PL_INT.PL_INT_ID, PL_INT.INT_FROM,PL_INT.INT_TO,PL_LEG.COLOR,PL_LEG.FONT".
 	",PL_LEG.NAME ".
@@ -746,6 +873,18 @@ function show_plday($PL_DAY_ID= "")
 
 	$arr = db_fetch_assoc($tsql);
 
+	if (sizeof($arr) > 0)
+	{
+		return $arr;
+	}
+	else
+	{
+		return null;
+	}
+}
+
+function pl_day_show_array($arr)
+{
 	if (sizeof($arr) > 0)
 	{
 
@@ -776,18 +915,13 @@ function show_plday($PL_DAY_ID= "")
 
 		print "	</tbody>
 	</table>";
-
-	}
-	else
-	{
-		print "<tr><td><em>Нет доступа к событиям дня сетки расписания</em></td></tr>";
 	}
 }
 
 /**
  * список записей для определенного расписания на дату, если нет даты, то на сегодня
- * @param int $PL_SUBJ_ID
- * @param string $date
+ * @param PL_SUBJ_ID int
+ * @param date
  */
 function show_planning($PL_SUBJ_ID, $date="")
 {
