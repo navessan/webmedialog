@@ -18,7 +18,7 @@
  */
 
 include("./include/auth.php");
-include_once("./lib/timespan_settings.php");
+//include_once("./lib/timespan_settings.php");
 
 /* set default action */
 if (!isset($_REQUEST["action"])) { $_REQUEST["action"] = ""; }
@@ -314,7 +314,7 @@ function show_plsubj()
 	$date=date("Ymd");
 	
 	pl_agend_show($PL_AGEND_ID, $date);
-	//pl_day_show_array(pl_day_get_array($PL_DAY_ID, date));
+	pl_day_show_array(pl_day_get_array((pl_day_get_id_by_pl_agend_id($PL_AGEND_ID, $date))));
 	
 	pl_excl_show($PL_SUBJ_ID, $date);
 	show_planning($PL_SUBJ_ID, $date);
@@ -562,58 +562,26 @@ function pl_agend_show($PL_AGEND_ID, $date="")
 }
 
 //TODO
-function pl_day_get_id_by_pl_agend_id($PL_AGEND_ID, $date="")
+function pl_day_get_id_by_pl_agend_id($PL_AGEND_ID, $date)
 {
 	/* ================= input validation ================= */
 	input_validate_input_number($PL_AGEND_ID);
 	input_validate_input_date($date);	
 	/* ==================================================== */
 
-	$tsql="SET DATEFIRST 1
-	 declare @date datetime
-	 set @date='".$date."'
+	$arr = pl_agend_get_array($PL_AGEND_ID,$date);
 
-	 SELECT top 1
-	 PL_DAY.PL_DAY_ID, PL_DAY.NAME
-	 ,PL_DAY.START_TIME, PL_DAY.END_TIME 
-	 ,DAY_EVEN, DAY_MONTH, DAY_OF_MONTH, DAY_OF_WEEK, DAY_ORDER, DAY_WEEK, DAY_WEEK_MONTH, DAY_YEAR
-	 ,PERIOD_FROM, PERIOD_TO
-	 ,DUREE_TRANCHE 
-	 FROM pl_day 
-	 WHERE 
-	 PL_DAY.ENABLED=1 
-	 and pl_agend_id in (".$PL_AGEND_ID.") 
-	 and (PERIOD_FROM is null or PERIOD_FROM <= @date)						/* День активен с */
-	 and (PERIOD_TO is null or PERIOD_TO >= @date)							/* День активен по */
-	 and (isnull(DAY_MONTH,0)=0 or DAY_MONTH=month(@date))							/* Месяц */
-	 and (isnull(DAY_MONTH,0)=0 or DAY_MONTH=month(@date))
-	 and (isnull(DAY_OF_MONTH,0)=0 or DAY_OF_MONTH = day(@date))					/* День месяца */
-	 and (isnull(DAY_YEAR,0)=0 or DAY_YEAR = (year(@date)-1995)/* magic year*/)		/* Год */
-	 and (isnull(DAY_EVEN,0)=0 or DAY_EVEN=(day(@date)& 1 + 1))						/* Признак четности, нечетный 2, четный 1 */
-	 and (isnull(DAY_WEEK,0)=0 or DAY_WEEK=(
-		 DATEPART(week,@date)-DATEPART(week,DATEADD(day,1-day(@date),@date))+1))		/* Номер недели в месяце */
-	 and (isnull(DAY_OF_WEEK,0)=0 
-			or (DAY_OF_WEEK=DATEPART(weekday,@date) and isnull(DAY_WEEK_MONTH,0)=0)	/* Номер дня в неделе */
-			or (DAY_OF_WEEK=DATEPART(weekday,@date) and DAY_WEEK_MONTH=DATEDIFF(day,DATEADD(day,1-day(@date),@date),@date)/7+1))
-					/* i-тый день недели в месяце */
-	 and (case when(isnull(INTERVAL_WORK,0)=0 and isnull(INTERVAL_OFF,0)=0) then 1 else (
-			case when (DATEDIFF(day,INTERVAL_STARTFROM,@date))%(INTERVAL_WORK+INTERVAL_OFF)<=(INTERVAL_WORK-1)then 1 else 0 end
-		 ) end)=1
-	 ORDER BY day_order
-	";
-
-	$arr = db_fetch_assoc($tsql);
-	
-	
-
+	//$PL_DAY_ID=0;
 	if (sizeof($arr) > 0)
 	{
-		return $arr;
+		foreach ($arr as $row)
+		{
+			$PL_DAY_ID=$row['PL_DAY_ID'];
+		}
 	}
-	else
-	{
-		return 0;
-	}	
+
+	//return $PL_DAY_ID;
+
 }
 
 function pl_agend_get_array($PL_AGEND_ID, $date="")
@@ -861,6 +829,9 @@ function pl_day_get_array($PL_DAY_ID)
 	/* ================= input validation ================= */
 	input_validate_input_number($PL_DAY_ID);
 	/* ==================================================== */
+	if(is_null($PL_DAY_ID)) print "null ";
+	if(is_numeric($PL_DAY_ID)) print "numeric "; else print "non numeric ";
+	print("PL_DAY_ID=".$PL_DAY_ID);
 
 	$tsql="SELECT ".
 	"PL_INT.PL_INT_ID, PL_INT.INT_FROM,PL_INT.INT_TO,PL_LEG.COLOR,PL_LEG.FONT".

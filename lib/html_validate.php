@@ -32,8 +32,10 @@ function input_validate_input_equals($value, $c_value) {
 
 function input_validate_input_number($value) {
 	if ((!is_numeric($value)) && ($value != "")) {
+	//if (!is_numeric($value)) {
 		die_html_input_error();
 	}
+	print "value=".$value."\n";
 }
 
 function input_validate_input_regex($value, $regex) {
