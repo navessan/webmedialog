@@ -1,6 +1,8 @@
 <?php
 /*
  +-------------------------------------------------------------------------+
+ | PHP Web gui for mssql database based on cacti source                    |
+ +-------------------------------------------------------------------------+
  | This program is free software; you can redistribute it and/or           |
  | modify it under the terms of the GNU General Public License             |
  | as published by the Free Software Foundation; either version 2          |
@@ -106,7 +108,6 @@ $user_auth_realm_filenames = array(
 	"about.php" => 2,
 	"empl.php" => 2,
 	"find_id.php" => 1,
-	"nitgen_auth_log.php" => 2,
 	"index.php" => 2,
 	"settings.php" => 1,
 	"web_user_admin.php" => 1,

@@ -154,6 +154,8 @@ $config["include_path"] = dirname(__FILE__);
 $config["version"] = $VERSION;
 /*check web_access column in database */
 $config["check_web_access"]=$CHECK_WEB_ACCESS;
+$config["log_verbosity"]=0;
+
 
 /* colors */
 $colors["dark_outline"] = "454E53";

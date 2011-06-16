@@ -287,6 +287,7 @@ function show_plsubj()
 	//print read_config_option("check_web_access")."<br>";
 	//print "version=".$config["version"]."<br>";
 	//print read_config_option("version")."<br>";
+	//print "log_verbosity=".$config["log_verbosity"];
 	
 	if($config["check_web_access"]>0)
 	{	
@@ -297,7 +298,6 @@ function show_plsubj()
 	$arr=db_fetch_row($tsql);
 	if (empty($arr))
 	{
-		
 		return;
 	}
 		print "<p><a href=\"planning.php\">".$arr['ORG_NAME']."</a>";
@@ -317,7 +317,7 @@ function show_plsubj()
 	pl_day_show_array(pl_day_get_array((pl_day_get_id_by_pl_agend_id($PL_AGEND_ID, $date))));
 	
 	pl_excl_show($PL_SUBJ_ID, $date);
-	show_planning($PL_SUBJ_ID, $date);
+	planning_show($PL_SUBJ_ID, $date);
 
 }
 
@@ -571,7 +571,7 @@ function pl_day_get_id_by_pl_agend_id($PL_AGEND_ID, $date)
 
 	$arr = pl_agend_get_array($PL_AGEND_ID,$date);
 
-	//$PL_DAY_ID=0;
+	$PL_DAY_ID=0;
 	if (sizeof($arr) > 0)
 	{
 		foreach ($arr as $row)
@@ -580,7 +580,7 @@ function pl_day_get_id_by_pl_agend_id($PL_AGEND_ID, $date)
 		}
 	}
 
-	//return $PL_DAY_ID;
+	return $PL_DAY_ID;
 
 }
 
@@ -777,16 +777,17 @@ function pl_excl_show_array($arr)
 function pl_day_show()
 {
 	print '<p>Список событий дня сетки расписания:</p>';
-	/* ================= input validation ================= */
-	input_validate_input_number(get_request_var("id"));
-	/* ==================================================== */
 
 	if (empty($_GET["id"]))
 	{
 		print '<p>Не выбран день сетки расписания:</p>';
 		return;
 	}
-	else
+	
+	/* ================= input validation ================= */
+	input_validate_input_number(get_request_var("id"));
+	/* ==================================================== */
+
 	$PL_DAY_ID=$_GET["id"];
 	//-----------
 	//show day name
@@ -829,18 +830,16 @@ function pl_day_get_array($PL_DAY_ID)
 	/* ================= input validation ================= */
 	input_validate_input_number($PL_DAY_ID);
 	/* ==================================================== */
-	if(is_null($PL_DAY_ID)) print "null ";
-	if(is_numeric($PL_DAY_ID)) print "numeric "; else print "non numeric ";
-	print("PL_DAY_ID=".$PL_DAY_ID);
 
-	$tsql="SELECT ".
-	"PL_INT.PL_INT_ID, PL_INT.INT_FROM,PL_INT.INT_TO,PL_LEG.COLOR,PL_LEG.FONT".
-	",PL_LEG.NAME ".
-	"FROM PL_INT PL_INT ".
-	"JOIN PL_LEG PL_LEG ON PL_LEG.PL_LEG_ID = PL_INT.PL_LEG_ID ".
-	"WHERE ".
-	"PL_INT.PL_DAY_ID in (".$PL_DAY_ID.") ".
-	"order by PL_INT.INT_FROM";
+	$tsql="SELECT 
+	 PL_INT.PL_INT_ID, PL_INT.INT_FROM,PL_INT.INT_TO,PL_LEG.COLOR,PL_LEG.FONT
+	 ,PL_LEG.NAME 
+	 FROM PL_INT PL_INT 
+	 JOIN PL_LEG PL_LEG ON PL_LEG.PL_LEG_ID = PL_INT.PL_LEG_ID 
+	 WHERE 
+	 PL_INT.PL_DAY_ID in (".$PL_DAY_ID.") 
+	 order by PL_INT.INT_FROM
+	";
 
 	$arr = db_fetch_assoc($tsql);
 
@@ -866,7 +865,8 @@ function pl_day_show_array($arr)
 		print "<tr> \n";
 		print "<td>PL_INT_ID</td><td>Name</td>";
 		print "<td>INT_FROM</td><td>END_TIME</td>";
-		print "<td>COLOR</td><td>COLOR2</td>";
+		print "<td>COLOR</td>";
+		//print "<td>COLOR2</td>";
 		print "</tr> \n";
 
 		foreach ($arr as $row)
@@ -880,7 +880,8 @@ function pl_day_show_array($arr)
 			//print "</a>";
 			print "</td>";
 			print "<td>".$row['INT_FROM']."</td><td>".$row['INT_TO']."</td>";
-			print "<td>".$row['COLOR']."</td><td bgcolor=\"#".delphi_color_to_html($row['COLOR'])."\">&nbsp</td>";
+			//print "<td>".$row['COLOR']."</td>";
+			print "<td bgcolor=\"#".delphi_color_to_html($row['COLOR'])."\">&nbsp</td>";
 			print "</tr> \n";
 		}
 
@@ -894,7 +895,7 @@ function pl_day_show_array($arr)
  * @param PL_SUBJ_ID int
  * @param date
  */
-function show_planning($PL_SUBJ_ID, $date="")
+function planning_show($PL_SUBJ_ID, $date="")
 {
 	//If no date is specified, the current date is assumed
 	if(!strlen($date)>0) $date=date("Ymd");
@@ -904,6 +905,27 @@ function show_planning($PL_SUBJ_ID, $date="")
 	input_validate_input_date($date);	
 	/* ==================================================== */
 	
+	$arr = planning_get_array($PL_SUBJ_ID,$date);
+
+	if (sizeof($arr) > 0)
+	{
+		planning_show_array($arr);		
+	}
+	else
+	{
+		print "<tr><td><em>Нет доступа к записям расписания</em></td></tr>";
+	}
+}
+
+function planning_get_array($PL_SUBJ_ID, $date="")
+{
+	//If no date is specified, the current date is assumed
+	if(!strlen($date)>0) $date=date("Ymd");
+	
+	/* ================= input validation ================= */
+	input_validate_input_number($PL_SUBJ_ID);
+	input_validate_input_date($date);	
+	/* ==================================================== */
 	
 	$tsql="SELECT
 	 PLANNING.PLANNING_ID,PLANNING.PL_SUBJ_ID,PLANNING.DATE_CONS,PLANNING.HEURE,PLANNING.DUREE,PLANNING.PATIENTS_ID
@@ -924,6 +946,18 @@ function show_planning($PL_SUBJ_ID, $date="")
 
 	$arr = db_fetch_assoc($tsql);
 
+	if (sizeof($arr) > 0)
+	{
+		return $arr;
+	}
+	else
+	{
+		return null;
+	}
+}
+
+function planning_show_array($arr)
+{
 	if (sizeof($arr) > 0)
 	{
 
@@ -963,11 +997,7 @@ function show_planning($PL_SUBJ_ID, $date="")
 		print "	</tbody>
 	</table>";
 
-	}else
-	{
-		print "<tr><td><em>Нет доступа к записям расписания</em></td></tr>";
 	}
 }
-
 
 ?>
