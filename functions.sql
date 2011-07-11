@@ -93,6 +93,26 @@ DECLARE
 END
 
 GO
+/****** Object:  UserDefinedFunction [dbo].[pl_GetNumWeekInMonth]    
+Script from medialog v7.2 
+
+******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE FUNCTION [dbo].[pl_GetNumWeekInMonth]( @PlanDateTime DateTime )  
+RETURNS Int AS  
+BEGIN 
+    DECLARE 
+       @Res Int,
+       @D Int
+    set @D =  DatePart( day, @PlanDateTime );
+    set @Res =   (@D + DatePart(weekday, @PlanDateTime - DATEPART(day, @PlanDateTime) ) - 2 ) / 7  +1;
+    Return( @Res )
+END
+
+GO
 /****** Object:  UserDefinedFunction [dbo].[pl_GetPlDay]    
 Script from medialog v7.2 
 получение PL_DAY_ID дневной сетки для нужной даты по AgendaID сетки расписания и PlanSubjID расписания???

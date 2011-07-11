@@ -561,13 +561,44 @@ function pl_agend_show($PL_AGEND_ID, $date="")
 	}
 }
 
-//TODO
+
+/**
+ * return PL_AGEND_ID for selected PL_SUBJ_ID and date 
+ * @param int $PL_SUBJ_ID
+ * @param string $date
+ * @return int PL_AGEND_ID
+ */
+function pl_agend_get_id_by_pl_subj_id($PL_SUBJ_ID, $date)
+{
+	/* ================= input validation ================= */
+	input_validate_input_number($PL_SUBJ_ID);
+	input_validate_input_date($date);	
+	/* ==================================================== */
+	
+	if(!$PL_SUBJ_ID>0) return 0;
+
+	$tsql="select dbo.pl_GetSubjAgenda ('".$PL_SUBJ_ID."', '".$date."' )";
+	
+	$arr = db_fetch_row($tsql);
+
+	$PL_AGEND_ID=0;
+	if (sizeof($arr) > 0)
+	{
+		$PL_AGEND_ID=$arr['PL_AGEND_ID'];
+	}
+
+	return $PL_AGEND_ID;
+
+}
+
 function pl_day_get_id_by_pl_agend_id($PL_AGEND_ID, $date)
 {
 	/* ================= input validation ================= */
 	input_validate_input_number($PL_AGEND_ID);
 	input_validate_input_date($date);	
 	/* ==================================================== */
+	
+	if(!$PL_AGEND_ID>0) return 0;
 
 	$arr = pl_agend_get_array($PL_AGEND_ID,$date);
 
@@ -708,6 +739,8 @@ function pl_excl_get_array($PL_SUBJ_ID, $date="")
 	input_validate_input_number($PL_SUBJ_ID);
 	if(strlen($date)>0) input_validate_input_date($date);
 	/* ==================================================== */
+	
+	if(!$PL_SUBJ_ID>0) return null;
 
 	$tsql="select 
 	 PL_EXCL.PL_EXCL_ID
@@ -830,6 +863,7 @@ function pl_day_get_array($PL_DAY_ID)
 	/* ================= input validation ================= */
 	input_validate_input_number($PL_DAY_ID);
 	/* ==================================================== */
+	if(!$PL_DAY_ID>0) return null;
 
 	$tsql="SELECT 
 	 PL_INT.PL_INT_ID, PL_INT.INT_FROM,PL_INT.INT_TO,PL_LEG.COLOR,PL_LEG.FONT
