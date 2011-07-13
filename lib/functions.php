@@ -95,7 +95,7 @@ function read_config_option($config_name, $force = FALSE) {
 			$config["config_options_array"] = $config_array;
 		}
 	}
-echo "rconf:".$config_name."=".$config_array[$config_name]."\n";
+//echo "rconf:".$config_name."=".$config_array[$config_name]."\n";
 	return $config_array[$config_name];
 }
 

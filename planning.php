@@ -306,19 +306,23 @@ function show_plsubj()
 		$PL_AGEND_ID=$arr['PL_AGEND_ID1'];
 
 	//-----------
-	show_agend($PL_AGEND_ID);
-	pl_excl_show($PL_SUBJ_ID);
-	
 	print("<p>today</p>");
 	
 	$date=date("Ymd");
+	
+	//$PL_AGEND_ID=
+	print " id=".pl_agend_get_id_by_pl_subj_id($PL_SUBJ_ID, $date);
 	
 	pl_agend_show($PL_AGEND_ID, $date);
 	pl_day_show_array(pl_day_get_array((pl_day_get_id_by_pl_agend_id($PL_AGEND_ID, $date))));
 	
 	pl_excl_show($PL_SUBJ_ID, $date);
 	planning_show($PL_SUBJ_ID, $date);
-
+	
+	print("<p>debug</p>");
+	show_agend($PL_AGEND_ID);
+	pl_excl_show($PL_SUBJ_ID);
+		
 }
 
 function pl_day_get_message($row)
@@ -577,8 +581,7 @@ function pl_agend_get_id_by_pl_subj_id($PL_SUBJ_ID, $date)
 	
 	if(!$PL_SUBJ_ID>0) return 0;
 
-	$tsql="select dbo.pl_GetSubjAgenda ('".$PL_SUBJ_ID."', '".$date."' )";
-	
+	$tsql="select dbo.pl_GetSubjAgenda ('".$PL_SUBJ_ID."', '".$date."' ) PL_AGEND_ID";
 	$arr = db_fetch_row($tsql);
 
 	$PL_AGEND_ID=0;
@@ -600,15 +603,12 @@ function pl_day_get_id_by_pl_agend_id($PL_AGEND_ID, $date)
 	
 	if(!$PL_AGEND_ID>0) return 0;
 
-	$arr = pl_agend_get_array($PL_AGEND_ID,$date);
+	$arr = pl_agend_get_array($PL_AGEND_ID, $date);
 
 	$PL_DAY_ID=0;
 	if (sizeof($arr) > 0)
 	{
-		foreach ($arr as $row)
-		{
-			$PL_DAY_ID=$row['PL_DAY_ID'];
-		}
+		$PL_DAY_ID=$arr['PL_DAY_ID'];
 	}
 
 	return $PL_DAY_ID;
@@ -621,6 +621,7 @@ function pl_agend_get_array($PL_AGEND_ID, $date="")
 	input_validate_input_number($PL_AGEND_ID);
 	input_validate_input_date($date);	
 	/* ==================================================== */
+	if(!$PL_AGEND_ID>0) return null;
 
 	$tsql="SET DATEFIRST 1
 	 declare @date datetime
@@ -655,7 +656,7 @@ function pl_agend_get_array($PL_AGEND_ID, $date="")
 	 ORDER BY day_order
 	";
 
-	$arr = db_fetch_assoc($tsql);
+	$arr = db_fetch_row($tsql);
 
 	if (sizeof($arr) > 0)
 	{
@@ -686,8 +687,9 @@ function pl_agend_show_array($arr)
 		print "</tr> \n";
 		
 
-		foreach ($arr as $row)
-		{
+		//foreach ($arr as $row)
+		//{
+		$row=$arr;
 			$PL_DAY_ID=$row['PL_DAY_ID'];
 			print "<tr> \n";
 			print "<td>";
@@ -703,7 +705,7 @@ function pl_agend_show_array($arr)
 			$msg=pl_day_get_message($row);
 			print "<td>".$msg."</td>";
 			print "</tr> \n";
-		}
+		//}
 
 		print "	</tbody>
 	</table>";
@@ -1032,6 +1034,18 @@ function planning_show_array($arr)
 	</table>";
 
 	}
+}
+
+function web_day_generate($PL_SUBJ_ID, $date)
+{
+	//If no date is specified, the current date is assumed
+	if(!strlen($date)>0) $date=date("Ymd");
+	
+	/* ================= input validation ================= */
+	input_validate_input_number($PL_SUBJ_ID);
+	input_validate_input_date($date);	
+	/* ==================================================== */
+		
 }
 
 ?>
