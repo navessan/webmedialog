@@ -310,16 +310,21 @@ function show_plsubj()
 	
 	$date=date("Ymd");
 	
-	//$PL_AGEND_ID=
-	print " id=".pl_agend_get_id_by_pl_subj_id($PL_SUBJ_ID, $date);
+	$full_day=web_day_generate($PL_SUBJ_ID, $date);
+	
+	web_day_show($full_day);
+	
+	print("<p>debug</p>");
+	//-----------
+	$PL_AGEND_ID=pl_agend_get_id_by_pl_subj_id($PL_SUBJ_ID, $date);
 	
 	pl_agend_show($PL_AGEND_ID, $date);
 	pl_day_show_array(pl_day_get_array((pl_day_get_id_by_pl_agend_id($PL_AGEND_ID, $date))));
 	
 	pl_excl_show($PL_SUBJ_ID, $date);
 	planning_show($PL_SUBJ_ID, $date);
-	
-	print("<p>debug</p>");
+	//-----------
+	print("<p>debug2</p>");
 	show_agend($PL_AGEND_ID);
 	pl_excl_show($PL_SUBJ_ID);
 		
@@ -1045,7 +1050,176 @@ function web_day_generate($PL_SUBJ_ID, $date)
 	input_validate_input_number($PL_SUBJ_ID);
 	input_validate_input_date($date);	
 	/* ==================================================== */
+	if(!$PL_SUBJ_ID>0) return null;
+	
+	//массив, который будет содержать все события
+	//начало и конец дня
+	//плановые события
+	//исключительные события
+	//записи в расписание
+	$full_day=array();
+	//массив для одного события
+	$day_row=array('START_TIME'=>'', 
+					'END_TIME'=>'', 
+					'DUREE'=>'', 
+					'TYPE'=>'', 
+					'NAME'=>'', 
+					'COLOR'=>'',
+					'WEB_ACCESS'=>'');
+	
+	$PL_AGEND_ID=0;
+	$PL_DAY_ID=0;
+	
+	$day_row['START_TIME']=''; 
+	$day_row['END_TIME']=''; 
+	$day_row['DUREE']='';
+	$day_row['TYPE']=''; 
+	$day_row['NAME']='';
+	$day_row['COLOR']='';
+	$day_row['WEB_ACCESS']='';
+	
+	$PL_AGEND_ID=pl_agend_get_id_by_pl_subj_id($PL_SUBJ_ID, $date);
+	
+	//получаем день PL_DAY
+	$row = pl_agend_get_array($PL_AGEND_ID,$date);
+
+	if (sizeof($row) > 0)
+	{
+		//debug
+		//pl_agend_show_array($row);
 		
+		$PL_DAY_ID=$row['PL_DAY_ID'];
+		
+		$day_row['START_TIME']=parse_time($row['START_TIME']);
+		$day_row['END_TIME']=parse_time($row['START_TIME']);
+		$day_row['NAME']=pl_day_get_message($row);
+		$full_day[]=$day_row;
+		
+		$day_row['START_TIME']=parse_time($row['END_TIME']);
+		$day_row['END_TIME']=parse_time($row['END_TIME']);
+		$day_row['NAME']="Конец рабочего дня";
+		$full_day[]=$day_row;		
+	}
+	else
+	{
+		print "<br>Нет доступа к сетке расписаниям<br>";
+		//выходим сразу или получаем остальные события дня?
+		//return;
+	}
+	
+	//------------------
+	//получаем плановые события дня
+	$arr=null;
+	if($PL_DAY_ID>0)
+		$arr = pl_day_get_array($PL_DAY_ID);
+
+	if (sizeof($arr) > 0)
+	{
+		//debug
+		//pl_day_show_array($arr);
+		
+		foreach ($arr as $row)
+		{
+			//заполняем
+			$day_row['START_TIME']=parse_time($row['INT_FROM']);
+			$day_row['END_TIME']=parse_time($row['INT_TO']);
+			$day_row['DUREE']='';
+			$day_row['TYPE']=''; 
+			$day_row['NAME']=$row['NAME'];
+			$day_row['COLOR']=delphi_color_to_html($row['COLOR']);
+			$day_row['WEB_ACCESS']='';
+						
+			$full_day[]=$day_row;
+		}
+	}
+
+	//------------------
+	//получаем исключительные события дня
+	$arr=null;
+	$arr = pl_excl_get_array($PL_SUBJ_ID, $date);
+
+	if (sizeof($arr) > 0)
+	{
+		//debug
+		//pl_excl_show_array($arr);
+		
+		foreach ($arr as $row)
+		{
+			//заполняем
+			$day_row['START_TIME']=parse_time($row['FROM_TIME']); 
+			$day_row['END_TIME']=parse_time($row['TO_TIME']); 
+			$day_row['DUREE']='';
+			$day_row['TYPE']=''; 
+			$day_row['NAME']=$row['NAME'];
+			$day_row['COLOR']=delphi_color_to_html($row['COLOR']);
+			$day_row['WEB_ACCESS']='';
+
+			$full_day[]=$day_row;
+		}
+	}
+	//------------------
+	//получаем записи в расписание за день
+	$arr=null;
+	$arr = planning_get_array($PL_SUBJ_ID,$date);
+
+	if (sizeof($arr) > 0)
+	{
+		//debug
+		//planning_show_array($arr);
+		
+		foreach ($arr as $row)
+		{
+			$day_row['START_TIME']=parse_time($row['HEURE']); 
+			$day_row['END_TIME']=''; 
+			$day_row['DUREE']=$row['DUREE'];
+			$day_row['TYPE']=''; 
+			$day_row['NAME']=$row['NAME']." ".$row['NOM']." ".$row['PRENOM']." ".$row['PATRONYME']." ".$row['COMMENTAIRE'];
+			$day_row['COLOR']=delphi_color_to_html($row['COLOR']);
+			$day_row['WEB_ACCESS']='';
+			
+			$full_day[]=$day_row;
+		}
+			
+	}	
+	//sort
+	return $full_day;
+}
+
+function web_day_show($arr)
+{
+	if (sizeof($arr) > 0)
+	{
+
+		print '<table cellspacing="0" cellpadding="1" border="1" align="center"
+	width="100%">
+	<tbody>';
+			
+		print "<tr> \n";
+		print "<td>START_TIME</td>"; 
+		print "<td>END_TIME</td>";
+		print "<td>DUREE</td>"; 
+		print "<td>TYPE</td>";
+		print "<td>NAME</td>"; 
+		print "<td>COLOR</td>";
+		print "<td>WEB_ACCESS</td>";
+		print "</tr> \n";
+
+		foreach ($arr as $row)
+		{
+			print "<tr> \n";
+			print "<td>".$row['START_TIME']."</td>";
+			print "<td>".(empty($row['END_TIME'])?"&nbsp":$row['END_TIME'])."</td>";
+			print "<td>".(empty($row['DUREE'])?"&nbsp":$row['DUREE'])."</td>";
+			print "<td>".(empty($row['TYPE'])?"&nbsp":$row['TYPE'])."</td>";
+			print "<td>".$row['NAME']."</td>";
+			print "<td bgcolor=\"#".$row['COLOR']."\">&nbsp</td>";
+			print "<td>".(empty($row['WEB_ACCESS'])?"&nbsp":$row['WEB_ACCESS'])."</td>";
+			//print "<td bgcolor=\"#".delphi_color_to_html($row['COLOR'])."\">&nbsp</td>";
+			print "</tr> \n";
+		}
+		print "	</tbody>
+	</table>";
+	}	
 }
 
 ?>

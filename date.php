@@ -18,7 +18,7 @@
  */
 
 include("./include/auth.php");
-include_once("./lib/timespan_settings.php");
+//include_once("./lib/timespan_settings.php");
 
 include_once("./include/header.php");
 
