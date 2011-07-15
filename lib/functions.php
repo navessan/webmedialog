@@ -539,7 +539,7 @@ function is_hexadecimal($hexstr) {
  * @param string $str
  * @return boolean
  */
-function is_date( $str )
+function is_date($str, $date_format = 'Ymd')
 {
   $stamp = strtotime( $str );
  
@@ -553,9 +553,10 @@ function is_date( $str )
  
   if (checkdate($month, $day, $year))
   {
-     return TRUE;
+	$str = trim($str);
+	if(date($date_format, $stamp) == $str)
+		return TRUE;
   }
- 
   return FALSE;
 } 
 

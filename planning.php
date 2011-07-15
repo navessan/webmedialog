@@ -75,7 +75,9 @@ function parse_time($time)
 	{
 		$msg=substr($time, 0,strlen($time)-2).":"
 			.substr($time,strlen($time)-2,strlen($time));
-	}		
+	}
+	if(strlen($msg)==4)
+		$msg="0".$msg;
 	return $msg;
 }
 
@@ -259,16 +261,21 @@ function show_plsubj()
 	global $config;
 	print '<p>Список дней для сетки расписания:</p>';
 	/* ================= input validation ================= */
-	input_validate_input_number(get_request_var("id"));
+	//input_validate_input_number(get_request_var("id"));
 	/* ==================================================== */
+	
+	$PL_SUBJ_ID=0;
 
-	if (empty($_GET["id"]))
+	if (!empty($_GET["id"]))
+	{
+			$PL_SUBJ_ID=$_GET["id"];
+	}
+	
+	if (!$PL_SUBJ_ID>0)
 	{
 		print '<p>Не выбрана сетка расписания:</p>';
 		return;
 	}
-	else
-	$PL_SUBJ_ID=$_GET["id"];
 	
 	//-----------
 	//show planning name
@@ -306,11 +313,22 @@ function show_plsubj()
 		$PL_AGEND_ID=$arr['PL_AGEND_ID1'];
 
 	//-----------
-	print("<p>today</p>");
+	$date="";
+	if (!empty($_GET["date"]))
+	{
+		$date=$_GET["date"];
+	}
 	
-	$date=date("Ymd");
-	
+	if(!is_date($date))
+	{
+		print '<p>Не выбрана дата</p>';
+		print "<p>сегодня ".date("Y.m.d")."</p>";
+		$date=date("Ymd");
+	}
+
+	print_calendar();
 	$full_day=web_day_generate($PL_SUBJ_ID, $date);
+	//print_r($full_day);
 	
 	web_day_show($full_day);
 	
@@ -637,11 +655,13 @@ function pl_agend_get_array($PL_AGEND_ID, $date="")
 	 ,PL_DAY.START_TIME, PL_DAY.END_TIME 
 	 ,DAY_EVEN, DAY_MONTH, DAY_OF_MONTH, DAY_OF_WEEK, DAY_ORDER, DAY_WEEK, DAY_WEEK_MONTH, DAY_YEAR
 	 ,PERIOD_FROM, PERIOD_TO
-	 ,DUREE_TRANCHE 
+	 ,DUREE_TRANCHE
+	 ,ENABLED 
 	 FROM pl_day 
 	 WHERE 
-	 PL_DAY.ENABLED=1 
-	 and pl_agend_id in (".$PL_AGEND_ID.") 
+	 /*PL_DAY.ENABLED=1 
+	 and */
+	 pl_agend_id in (".$PL_AGEND_ID.") 
 	 and (PERIOD_FROM is null or PERIOD_FROM <= @date)						/* День активен с */
 	 and (PERIOD_TO is null or PERIOD_TO >= @date)							/* День активен по */
 	 and (isnull(DAY_MONTH,0)=0 or DAY_MONTH=month(@date))							/* Месяц */
@@ -655,7 +675,7 @@ function pl_agend_get_array($PL_AGEND_ID, $date="")
 			or (DAY_OF_WEEK=DATEPART(weekday,@date) and isnull(DAY_WEEK_MONTH,0)=0)	/* Номер дня в неделе */
 			or (DAY_OF_WEEK=DATEPART(weekday,@date) and DAY_WEEK_MONTH=DATEDIFF(day,DATEADD(day,1-day(@date),@date),@date)/7+1))
 					/* i-тый день недели в месяце */
-	 and (case when(isnull(INTERVAL_WORK,0)=0 and isnull(INTERVAL_OFF,0)=0) then 1 else (
+	 and (case when((INTERVAL_WORK is null or INTERVAL_WORK!>0) and (INTERVAL_OFF is null or INTERVAL_OFF!>0)) then 1 else (
 			case when (DATEDIFF(day,INTERVAL_STARTFROM,@date))%(INTERVAL_WORK+INTERVAL_OFF)<=(INTERVAL_WORK-1)then 1 else 0 end
 		 ) end)=1
 	 ORDER BY day_order
@@ -1087,18 +1107,31 @@ function web_day_generate($PL_SUBJ_ID, $date)
 	{
 		//debug
 		//pl_agend_show_array($row);
+		if($row['ENABLED']==0)
+		{
+			$full_day[]['NAME']="Нет приема";
+			return $full_day;
+		}
 		
 		$PL_DAY_ID=$row['PL_DAY_ID'];
 		
-		$day_row['START_TIME']=parse_time($row['START_TIME']);
-		$day_row['END_TIME']=parse_time($row['START_TIME']);
-		$day_row['NAME']=pl_day_get_message($row);
-		$full_day[]=$day_row;
+		$key =parse_time($row['START_TIME']);
+		$full_day[$key]['START_TIME']=parse_time($row['START_TIME']);
+		$full_day[$key]['END_TIME']=parse_time($row['START_TIME']);
+		$full_day[$key]['DUREE']='';
+		$full_day[$key]['TYPE']=''; 		
+		$full_day[$key]['NAME']=pl_day_get_message($row);
+		$full_day[$key]['COLOR']='';
+		$full_day[$key]['WEB_ACCESS']='';
 		
-		$day_row['START_TIME']=parse_time($row['END_TIME']);
-		$day_row['END_TIME']=parse_time($row['END_TIME']);
-		$day_row['NAME']="Конец рабочего дня";
-		$full_day[]=$day_row;		
+		$key =parse_time($row['END_TIME']);
+		$full_day[$key]['START_TIME']=parse_time($row['END_TIME']);
+		$full_day[$key]['END_TIME']=parse_time($row['END_TIME']);
+		$full_day[$key]['DUREE']='';
+		$full_day[$key]['TYPE']='';
+		$full_day[$key]['NAME']="Конец рабочего дня";
+		$full_day[$key]['COLOR']='';
+		$full_day[$key]['WEB_ACCESS']='';		
 	}
 	else
 	{
@@ -1121,15 +1154,14 @@ function web_day_generate($PL_SUBJ_ID, $date)
 		foreach ($arr as $row)
 		{
 			//заполняем
-			$day_row['START_TIME']=parse_time($row['INT_FROM']);
-			$day_row['END_TIME']=parse_time($row['INT_TO']);
-			$day_row['DUREE']='';
-			$day_row['TYPE']=''; 
-			$day_row['NAME']=$row['NAME'];
-			$day_row['COLOR']=delphi_color_to_html($row['COLOR']);
-			$day_row['WEB_ACCESS']='';
-						
-			$full_day[]=$day_row;
+			$key =parse_time($row['INT_FROM']);		
+			$full_day[$key]['START_TIME']=parse_time($row['INT_FROM']);
+			$full_day[$key]['END_TIME']=parse_time($row['INT_TO']);
+			$full_day[$key]['DUREE']='';
+			$full_day[$key]['TYPE']=''; 
+			$full_day[$key]['NAME']=$row['NAME'];
+			$full_day[$key]['COLOR']=delphi_color_to_html($row['COLOR']);
+			$full_day[$key]['WEB_ACCESS']='';
 		}
 	}
 
@@ -1146,15 +1178,14 @@ function web_day_generate($PL_SUBJ_ID, $date)
 		foreach ($arr as $row)
 		{
 			//заполняем
-			$day_row['START_TIME']=parse_time($row['FROM_TIME']); 
-			$day_row['END_TIME']=parse_time($row['TO_TIME']); 
-			$day_row['DUREE']='';
-			$day_row['TYPE']=''; 
-			$day_row['NAME']=$row['NAME'];
-			$day_row['COLOR']=delphi_color_to_html($row['COLOR']);
-			$day_row['WEB_ACCESS']='';
-
-			$full_day[]=$day_row;
+			$key =parse_time($row['FROM_TIME']);
+			$full_day[$key]['START_TIME']=parse_time($row['FROM_TIME']); 
+			$full_day[$key]['END_TIME']=parse_time($row['TO_TIME']); 
+			$full_day[$key]['DUREE']='';
+			$full_day[$key]['TYPE']=''; 
+			$full_day[$key]['NAME']=$row['NAME'];
+			$full_day[$key]['COLOR']=delphi_color_to_html($row['COLOR']);
+			$full_day[$key]['WEB_ACCESS']='';
 		}
 	}
 	//------------------
@@ -1169,19 +1200,18 @@ function web_day_generate($PL_SUBJ_ID, $date)
 		
 		foreach ($arr as $row)
 		{
-			$day_row['START_TIME']=parse_time($row['HEURE']); 
-			$day_row['END_TIME']=''; 
-			$day_row['DUREE']=$row['DUREE'];
-			$day_row['TYPE']=''; 
-			$day_row['NAME']=$row['NAME']." ".$row['NOM']." ".$row['PRENOM']." ".$row['PATRONYME']." ".$row['COMMENTAIRE'];
-			$day_row['COLOR']=delphi_color_to_html($row['COLOR']);
-			$day_row['WEB_ACCESS']='';
-			
-			$full_day[]=$day_row;
+			$key =parse_time($row['HEURE']);
+			$full_day[$key]['START_TIME']=parse_time($row['HEURE']); 
+			$full_day[$key]['END_TIME']=''; 
+			$full_day[$key]['DUREE']=$row['DUREE'];
+			$full_day[$key]['TYPE']=''; 
+			$full_day[$key]['NAME']=$row['NAME']." ".$row['NOM']." ".$row['PRENOM']." ".$row['PATRONYME']." ".$row['COMMENTAIRE'];
+			$full_day[$key]['COLOR']=delphi_color_to_html($row['COLOR']);
+			$full_day[$key]['WEB_ACCESS']='';
 		}
 			
 	}	
-	//sort
+	ksort($full_day);
 	return $full_day;
 }
 
@@ -1207,12 +1237,12 @@ function web_day_show($arr)
 		foreach ($arr as $row)
 		{
 			print "<tr> \n";
-			print "<td>".$row['START_TIME']."</td>";
+			print "<td>".(empty($row['START_TIME'])?"&nbsp":$row['START_TIME'])."</td>";
 			print "<td>".(empty($row['END_TIME'])?"&nbsp":$row['END_TIME'])."</td>";
 			print "<td>".(empty($row['DUREE'])?"&nbsp":$row['DUREE'])."</td>";
 			print "<td>".(empty($row['TYPE'])?"&nbsp":$row['TYPE'])."</td>";
-			print "<td>".$row['NAME']."</td>";
-			print "<td bgcolor=\"#".$row['COLOR']."\">&nbsp</td>";
+			print "<td>".(empty($row['NAME'])?"&nbsp":$row['NAME'])."</td>";
+			print "<td bgcolor=\"#".(empty($row['COLOR'])?"000000":$row['COLOR'])."\">&nbsp</td>";
 			print "<td>".(empty($row['WEB_ACCESS'])?"&nbsp":$row['WEB_ACCESS'])."</td>";
 			//print "<td bgcolor=\"#".delphi_color_to_html($row['COLOR'])."\">&nbsp</td>";
 			print "</tr> \n";
@@ -1220,6 +1250,50 @@ function web_day_show($arr)
 		print "	</tbody>
 	</table>";
 	}	
+}
+
+function print_calendar()
+{
+	//$month_names = array(1=>'january', 2=>'february', 3=>'march', 4=>'april', 5=>'may', 6=>'june', 7=>'july', 8=>'august', 9=>'september', 10=>'october', 11=>'november', 12=>'december');
+	$month_names = array(1=>"Январь", 2=>"Февраль", 3=>"Март", 4=>"Апрель", 5=>"Май", 6=>"Июнь", 7=>"Июль", 8=>"Август", 9=>"Сентябрь", 10=>"Октябрь", 11=>"Ноябрь", 12=>"Декабрь");
+	$day_names = array('ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС');
+	$allow_past = true;
+	$date_format = 'Ymd';
+	$pagename=basename($_SERVER["REQUEST_URI"]);
+	//----------
+	$month = isset($_GET['month'])? $_GET['month'] : date('n');
+	$pd = mktime (0,0,0,$month,1,date('Y'));// timestamp of the first day
+	$zd = -(date('w', $pd)? (date('w', $pd)-1) : 6)+1;// monday before
+	$kd = date('t', $pd);// last day of moth
+	echo '
+    <div class="month_title">
+      <a href="'.$pagename.'?month='.($month-1).'" class="month_move">&laquo;</a>
+      <div class="month_name">'.$month_names[date('n', mktime(0,0,0,$month,1,date('Y')))].' '.date('Y', mktime(0,0,0,$month,1,date('Y'))).'</div>
+      <a href="'.$pagename.'?month='.($month+1).'" class="month_move">&raquo;</a>
+      <div class="r"></div>
+    </div>';
+	for ($d=0;$d<7;$d++) {
+		echo '
+    <div class="week_day">'.$day_names[$d].'</div>';
+	}
+	echo '
+    <div class="r"></div>';
+	for ($d=$zd;$d<=$kd;$d++) {
+		$i = mktime (0,0,0,$month,$d,date('Y'));
+		if ($i >= $pd) {
+			$today = (date('Ymd') == date('Ymd', $i))? '_today' : '';
+			$minulost = (date('Ymd') >= date('Ymd', $i+86400)) && !$allow_past;
+			echo '
+    <div class="day'.$today.'">'.($minulost? date('j', $i) : '<a title="'.date('Ymd', $i).'" href="'.$pagename."&date=".date($date_format, $i).'">'.date('j', $i).'</a>').'</div>';
+		} else {
+			echo '
+    <div class="no_day">&nbsp;</div>';
+		}
+		if (date('w', $i) == 0 && $i >= $pd) {
+			echo '
+    <div class="r"></div>';
+		}
+	}
 }
 
 ?>

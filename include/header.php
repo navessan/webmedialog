@@ -28,6 +28,14 @@
 	<meta name="description" content="web database gui">
 	<link href="images/favicon.ico" rel="shortcut icon"/>
 	<link href="include/main.css" rel="stylesheet">
+	<link href="include/calendar.css" type="text/css" rel="stylesheet" />
+	<script language="javascript">
+	<!--
+	function insertdate(d) {
+		window.document.getElementById('date').value = d;
+	}
+	//-->
+	</script>
 	
 	<script type="text/javascript" src="include/jscalendar/calendar.js"></script>
 	<script type="text/javascript" src="include/jscalendar/lang/calendar-en.js"></script>
