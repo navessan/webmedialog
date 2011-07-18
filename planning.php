@@ -291,7 +291,7 @@ function show_plsubj()
 	
 	//print "library_path=".$config["library_path"]."<br>";
 	//print "check_web_access=".$config["check_web_access"]."<br>";
-	//print read_config_option("check_web_access")."<br>";
+	print read_config_option("check_web_access")."<br>";
 	//print "version=".$config["version"]."<br>";
 	//print read_config_option("version")."<br>";
 	//print "log_verbosity=".$config["log_verbosity"];
@@ -326,11 +326,13 @@ function show_plsubj()
 		$date=date("Ymd");
 	}
 
-	print_calendar();
+	print_calendar("planning.php?action=plsubj&id=".$PL_SUBJ_ID);
 	$full_day=web_day_generate($PL_SUBJ_ID, $date);
 	//print_r($full_day);
 	
 	web_day_show($full_day);
+	
+	pl_exam_show($PL_SUBJ_ID);
 	
 	print("<p>debug</p>");
 	//-----------
@@ -1061,6 +1063,92 @@ function planning_show_array($arr)
 	}
 }
 
+function pl_exam_show($PL_SUBJ_ID)
+{
+
+	/* ================= input validation ================= */
+	input_validate_input_number($PL_SUBJ_ID);
+	/* ==================================================== */
+
+	$arr = pl_exam_get_array($PL_SUBJ_ID);
+
+	if (sizeof($arr) > 0)
+	{
+		print "<tr><td><em>Виды приема расписания</em></td></tr>";
+		pl_exam_show_array($arr);
+		
+	}else
+	{
+		print "<tr><td><em>Нет доступа к видам приема расписания</em></td></tr>";
+	}
+}
+
+function pl_exam_get_array($PL_SUBJ_ID)
+{
+	/* ================= input validation ================= */
+	input_validate_input_number($PL_SUBJ_ID);
+	/* ==================================================== */
+	
+	if(!$PL_SUBJ_ID>0) return null;
+
+	$tsql="SELECT
+	 PL_EXAM.PL_EXAM_ID
+	 ,PL_EXAM.NAME
+	 ,PL_EXAM.DUREE
+	 ,PL_EXAM.COLOR
+	 FROM
+	  PL_EXAM
+	  LEFT OUTER JOIN PL_SUBJ_EXAM ON PL_SUBJ_EXAM.PL_EXAM_ID = PL_EXAM.PL_EXAM_ID
+	 WHERE
+	  PL_SUBJ_ID in (".$PL_SUBJ_ID.")
+	 order by PL_SUBJ_EXAM.EXAM_ORDER";
+
+	$arr = db_fetch_assoc($tsql);
+
+	if (sizeof($arr) > 0)
+	{
+		return $arr;
+	}
+	else
+	{
+		return null;
+	}
+}
+
+function pl_exam_show_array($arr)
+{
+	if (sizeof($arr) > 0)
+	{
+
+		print '<table cellspacing="0" cellpadding="1" border="1" align="center"
+	width="100%">
+	<tbody>';
+			
+		print "<tr> \n";
+		print "<td>PL_EXAM_ID</td><td>NAME</td>";
+		print "<td>DUREE</td>";
+		print "<td>COLOR</td>";
+		print "</tr> \n";
+
+		foreach ($arr as $row)
+		{
+			print "<tr> \n";
+			print "<td>";
+			print $row['PL_EXAM_ID'];
+			print "</td><td>";
+			print $row['NAME'];
+			print "</td>";
+			print "<td>".$row['DUREE']."</td>";
+			print "<td bgcolor=\"#".delphi_color_to_html($row['COLOR'])."\">&nbsp</td>";
+			print "</tr> \n";
+		}
+
+		print "	</tbody>
+	</table>";
+
+	}
+}
+
 function web_day_generate($PL_SUBJ_ID, $date)
 {
 	//If no date is specified, the current date is assumed
@@ -1135,9 +1223,10 @@ function web_day_generate($PL_SUBJ_ID, $date)
 	}
 	else
 	{
-		print "<br>Нет доступа к сетке расписаниям<br>";
+		$full_day[]['NAME']="Нет приема";
+		//print "<br>Нет доступа к сетке расписаниям<br>";
 		//выходим сразу или получаем остальные события дня?
-		//return;
+		return $full_day;
 	}
 	
 	//------------------
@@ -1242,7 +1331,10 @@ function web_day_show($arr)
 			print "<td>".(empty($row['DUREE'])?"&nbsp":$row['DUREE'])."</td>";
 			print "<td>".(empty($row['TYPE'])?"&nbsp":$row['TYPE'])."</td>";
 			print "<td>".(empty($row['NAME'])?"&nbsp":$row['NAME'])."</td>";
-			print "<td bgcolor=\"#".(empty($row['COLOR'])?"000000":$row['COLOR'])."\">&nbsp</td>";
+			if(empty($row['COLOR']))
+				print "<td>&nbsp</td>";
+			else
+				print "<td bgcolor=\"#".$row['COLOR']."\">&nbsp</td>";
 			print "<td>".(empty($row['WEB_ACCESS'])?"&nbsp":$row['WEB_ACCESS'])."</td>";
 			//print "<td bgcolor=\"#".delphi_color_to_html($row['COLOR'])."\">&nbsp</td>";
 			print "</tr> \n";
@@ -1252,14 +1344,14 @@ function web_day_show($arr)
 	}	
 }
 
-function print_calendar()
+function print_calendar($pagename)
 {
 	//$month_names = array(1=>'january', 2=>'february', 3=>'march', 4=>'april', 5=>'may', 6=>'june', 7=>'july', 8=>'august', 9=>'september', 10=>'october', 11=>'november', 12=>'december');
 	$month_names = array(1=>"Январь", 2=>"Февраль", 3=>"Март", 4=>"Апрель", 5=>"Май", 6=>"Июнь", 7=>"Июль", 8=>"Август", 9=>"Сентябрь", 10=>"Октябрь", 11=>"Ноябрь", 12=>"Декабрь");
 	$day_names = array('ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС');
 	$allow_past = true;
 	$date_format = 'Ymd';
-	$pagename=basename($_SERVER["REQUEST_URI"]);
+	//$pagename=basename($_SERVER["REQUEST_URI"]);
 	//----------
 	$month = isset($_GET['month'])? $_GET['month'] : date('n');
 	$pd = mktime (0,0,0,$month,1,date('Y'));// timestamp of the first day

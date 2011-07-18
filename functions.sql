@@ -358,3 +358,43 @@ DECLARE
     )
   end
 END
+
+GO
+/****** Object:  StoredProcedure [dbo].[pl_GetSubjDayParam]
+Script from medialog v7.2
+
+ ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROCEDURE [dbo].[pl_GetSubjDayParam] ( @SubjID Int, @DatePlan DateTime, @StartTime DateTime output, @EndTime DateTime output, @IntervalDuration DateTime  output, @DayEnabled Int output )  AS
+BEGIN
+DECLARE
+  @SubjAgenda int,
+  @PlDay int
+
+  SET @DayEnabled = 0;
+  SET @StartTime = 0;
+  SET @EndTime = 0;
+  SET @IntervalDuration = 0;
+
+  set @SubjAgenda = dbo.pl_GetSubjAgenda( @SubjID, @DatePlan );
+  set @PlDay = dbo.pl_GetPlDay( @SubjAgenda, @DatePlan, @SubjID );
+
+  SELECT @IntervalDuration = dbo.pl_fPlanTimeToTime( duree_tranche ) from PL_AGEND where
+  PL_AGEND_ID = @SubjAgenda;
+
+  if isnull(@IntervalDuration, 0) = 0
+  begin
+		select top 1 @IntervalDuration = dbo.pl_fPlanTimeToTime( p.duree_tranche )
+		from pl_subj pl inner loop join pl_subj_param sp on sp.pl_subj_id = pl.pl_subj_id
+						inner loop join pl_param p on p.pl_param_id = sp.pl_param_id 
+		where pl.pl_subj_id = @SubjID 
+  end
+
+  SELECT @StartTime= dbo.pl_fPlanTimeToTime( start_time ), @EndTime= dbo.pl_fPlanTimeToTime( end_time ), @DayEnabled = enabled FROM PL_DAY
+  where PL_DAY_id = @PlDay;
+
+END
+
