@@ -136,26 +136,71 @@ $fields_array=array('DOMC_TYPE'=>'Тип документа',
 'Q_NAME'=>'Наименование СМО');
 
 $fields_search_array=array(
-array("sql"=>"fam","name"=>"Фамилия","value"=>""),
+array("sql"=>"fam","name"=>"Фамилия","value"=>"","html"=>"<br>"),
 array("sql"=>"im","name"=>"Имя","value"=>""),
 array("sql"=>"ot","name"=>"Отчество","value"=>""),
-array("sql"=>"birthday","name"=>"Дата рождения","value"=>"")
+array("sql"=>"birthday","name"=>"Дата рождения","value"=>"","type"=>"datetime"),
+array("sql"=>"series","name"=>"Серия полиса","value"=>"","html"=>"<br>"),
+array("sql"=>"number","name"=>"Номер полиса","value"=>"")
 );
 
+$month_array=array(
+array("sql"=>"0811","name"=>"август 2011"),
+array("sql"=>"0911","name"=>"сентябрь 2011")
+);
 
-echo '<form method=post>';
+echo '<form method=post>
+	<select name="month">';
 
+//выбор текущего месяца
+$sql_month='0911';
+
+$get_month=get_request_var_post("month");
+$get_month=sanitize_search_string($get_month);
+$month_selected_flag=false;
+
+echo '<br>'.$get_month.'<br>';
+for ($i=0;$i<count($month_array);$i++)
+{
+	echo '<option ';
+	
+	//select month from user request	
+	if($get_month==$month_array[$i]['sql'])
+	{
+		echo 'selected ';
+		$sql_month=$month_array[$i]['sql'];
+		$month_selected_flag=true;
+	}
+	else 
+	//select last month if no user request
+	if(!$month_selected_flag &($i==(count($month_array)-1)))
+	{
+		echo 'selected ';
+		$sql_month=$month_array[$i]['sql'];
+	}
+	
+	echo 'value="'.$month_array[$i]['sql'].'">';
+	echo $month_array[$i]['name'].'</option>';
+}
+	
+echo '</select>';
+//echo 'Всего записей:'.get_month_records_count($conn, $sql_month).'<br>';
+
+//вывод полей для поиска с заполнением значений
 for($i=0;$i<count($fields_search_array);$i++)
 {
 	$field=$fields_search_array[$i];
 	$field['value']=get_request_var_post($field['sql']);
 	$field['value']=sanitize_search_string($field['value']);
+	if(isset($field['html']))
+		echo $field['html'];		
 	echo $field['name'].': <input type=text name="'.$field['sql'].'" value="'.$field['value'].'">';
 	$fields_search_array[$i]=$field;
 }
 
 echo '		<input type=submit name=send value=search>
 	</form>';
+
 
 $sql_where="";
 
@@ -166,14 +211,14 @@ foreach ($fields_search_array as $field)
 		if(strlen($sql_where)>0)
 			$sql_where.=" and ";
 		$sql_where.=$field['sql']." like '".$field['value']."%'";	
+		//TODO datetime query
 	}
 }
 
 $top_count=60;
-$month='0811';
+
 /* Set up and execute the query. */
-$tsql = "SELECT TOP $top_count * FROM usreg$month
-		order by fam";
+//$tsql = "SELECT TOP $top_count * FROM usreg$sql_month order by fam";
 
 $tsql = "SELECT top $top_count
 [enp]
@@ -191,7 +236,7 @@ $tsql = "SELECT top $top_count
       ,[date_e]
       ,[dstop]
       ,[ss]
-      ,[status]
+--      ,[status]
 ,case 
 when usreg.domc_type='00' then 'Лист регистрации'
 when usreg.domc_type='01' then 'Полис до 01.05.2011'
@@ -216,7 +261,7 @@ end polis_s_bit
 --,'|' '|',cmo_obl.*
 --,'|' '|',tersmo.*
 
-FROM usreg$month usreg
+FROM usreg$sql_month usreg
 left outer join atd on substring(usreg.region,1,5)=substring(atd.okato,1,5)
 left outer join atd atd_r on substring(usreg.region,1,2)+'000000000'=atd_r.okato
 left outer join cmo_obl on (usreg.code_msk=cmo_obl.cod_cmo and rtrim(cmo_obl.q_ogrn)<>'')
@@ -254,7 +299,7 @@ if(sqlsrv_has_rows($stmt))
 	echo '<tr>';
 	
 	$metadata=sqlsrv_field_metadata($stmt);
-	
+	//internal column names
 	for ($i=0;$i < count($metadata);$i++)
 	{
 		$meta = $metadata[$i];
@@ -262,6 +307,8 @@ if(sqlsrv_has_rows($stmt))
 		echo '<td>' . $meta['Name'] . '</td>';
 	}
 	echo '</tr>';
+	
+	//human readable column names
 	echo '<tr>';
 	for ($i=0;$i < count($metadata);$i++)
 	{
@@ -314,4 +361,38 @@ if(sqlsrv_has_rows($stmt))
 /* Free statement and connection resources. */
 sqlsrv_free_stmt( $stmt);
 sqlsrv_close( $conn);
+
+function get_month_records_count($conn, $month)
+{
+	if(!strlen($month)>0)
+	return -1;
+
+	$tsql="select count(fam) from usreg".$month;
+
+	$stmt = sqlsrv_query($conn, $tsql);
+
+	if( $stmt === false)
+	{
+		echo "Error in query preparation/execution.\n";
+		die( FormatErrors( sqlsrv_errors() ) );
+	}
+
+	if(sqlsrv_has_rows($stmt))
+	{
+		/* Retrieve each row as an associative array and display the results.*/
+		while( $row = sqlsrv_fetch_array( $stmt, SQLSRV_FETCH_ASSOC))
+		{
+			foreach ($row as $field)
+			{
+				return $field;
+			}
+		}
+	}
+	/* Free statement and connection resources. */
+	sqlsrv_free_stmt( $stmt);
+}
+
 ?>
+
+</body>
+</html>
