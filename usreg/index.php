@@ -24,6 +24,8 @@ $database_username = "usreg";
 $database_password = "1234";
 $database_port = "";
 
+
+$debug=0;
 /* display ALL errors */
 error_reporting(E_ALL);
 
@@ -116,7 +118,8 @@ if( $conn === false )
 
 
 //-------------------
-//display_search_form();
+if(isset($debug))
+	if($debug==1) display_search_form();
 //-------------------
 
 
@@ -136,12 +139,12 @@ $fields_array=array('DOMC_TYPE'=>'Тип документа',
 'Q_NAME'=>'Наименование СМО');
 
 $fields_search_array=array(
-array("sql"=>"fam","name"=>"Фамилия","value"=>"","html"=>"<br>"),
-array("sql"=>"im","name"=>"Имя","value"=>""),
-array("sql"=>"ot","name"=>"Отчество","value"=>""),
-array("sql"=>"birthday","name"=>"Дата рождения","value"=>"","type"=>"datetime"),
-array("sql"=>"series","name"=>"Серия полиса","value"=>"","html"=>"<br>"),
-array("sql"=>"number","name"=>"Номер полиса","value"=>"")
+array("sql"=>"fam","name"=>"Фамилия","value"=>"","html"=>"<br>","type"=>"text"),
+array("sql"=>"im","name"=>"Имя","value"=>"","type"=>"text"),
+array("sql"=>"ot","name"=>"Отчество","value"=>"","type"=>"text"),
+array("sql"=>"birthday","name"=>"Дата или год рождения","value"=>"","type"=>"datetime"),
+array("sql"=>"series","name"=>"Серия полиса","value"=>"","html"=>"<br>","type"=>"text"),
+array("sql"=>"number","name"=>"Номер полиса","value"=>"","type"=>"text")
 );
 
 $month_array=array(
@@ -192,6 +195,9 @@ for($i=0;$i<count($fields_search_array);$i++)
 	$field=$fields_search_array[$i];
 	$field['value']=get_request_var_post($field['sql']);
 	$field['value']=sanitize_search_string($field['value']);
+	$field['value']=trim($field['value']);
+	if($field['type']=="datetime")
+		$field['value']=str_replace(array('\'', '-', '.', ',', ' ', '/'), '-', $field['value']);
 	if(isset($field['html']))
 		echo $field['html'];		
 	echo $field['name'].': <input type=text name="'.$field['sql'].'" value="'.$field['value'].'">';
@@ -207,13 +213,79 @@ $sql_where="";
 foreach ($fields_search_array as $field)
 {
 	if(strlen($field['value'])>0)
-	{
-		if(strlen($sql_where)>0)
-			$sql_where.=" and ";
-		$sql_where.=$field['sql']." like '".$field['value']."%'";	
-		//TODO datetime query
+	{			
+		if($field['type']=="datetime")
+		{
+			//datetime query
+			$day = "";
+			$month = "";
+			$year = "";
+			$sqldate="";
+			$sqldate_query="";
+			
+			$a_date = explode('-', $field['value']); 
+			if(count($a_date)==1)
+			{
+				//only year
+				$year=$a_date[0];
+				$month = 1;
+				$day = 1;
+				if(checkdate($month, $day, $year))
+				{
+					$sqldate=date("Ymd",mktime(0,0,0,$month,$day,$year));
+					$sqldate_query=	"(".$field['sql'].">='".$sqldate." 00:00:00.000'";
+					
+					$sqldate=date("Ymd",mktime(0,0,0,$month,$day,$year+1));
+					$sqldate_query.=" and ".$field['sql']."<'".$sqldate." 00:00:00.000')";
+				}					
+			}
+			else if(count($a_date)==2)
+			{
+				//year and month
+				$year = $a_date[0];
+				$month = $a_date[1];
+				$day = 1;
+				if(checkdate($month, $day, $year))
+				{
+					$sqldate=date("Ymd",mktime(0,0,0,$month,$day,$year));
+					$sqldate_query=	"(".$field['sql'].">='".$sqldate." 00:00:00.000'";
+					
+					$sqldate=date("Ymd",mktime(0,0,0,$month+1,$day,$year));
+					$sqldate_query.=" and ".$field['sql']."<'".$sqldate." 00:00:00.000')";
+				}
+			}				
+			else if(count($a_date)==3)
+			{
+				//full date with year, month, day
+				$year = $a_date[0];
+				$month = $a_date[1];
+				$day = $a_date[2];
+				if(checkdate($month, $day, $year))
+				{
+					$sqldate=date("Ymd",mktime(0,0,0,$month,$day,$year));
+					$sqldate_query=$field['sql']."='".$sqldate." 00:00:00.000'";
+				}	
+			}
+
+			if(strlen($sqldate_query)>0)
+			{
+				if(strlen($sql_where)>0)
+					$sql_where.=" and ";
+				$sql_where.=$sqldate_query;
+			}
+		}
+		else 
+		{
+			if(strlen($sql_where)>0)
+				$sql_where.=" and ";
+			$sql_where.=$field['sql']." like '".$field['value']."%'";
+		}	
 	}
 }
+
+if(isset($debug))
+	if($debug==1) echo $sql_where;
+
 
 $top_count=60;
 
