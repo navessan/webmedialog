@@ -82,6 +82,61 @@ function parse_time($time)
 }
 
 /**
+ * форматирует входную строку времени в вид 00:00
+ * @param string $time
+ * @return string
+ */
+function parse_time2($time)
+{
+	$msg="";
+	$stamp1=0;
+
+	if(is_null($time)||($time==0)||($time=="0"))
+		return "00:00";
+	
+	$time_arr=explode(":",$time, 2);
+	
+	if(count($time_arr)==2)
+	{
+		$hour=$time_arr[0];
+		$minute=$time_arr[1];
+	}
+	else 
+	{
+		$stamp1=mktime(substr($time, 0,strlen($time)-2),
+						substr($time,strlen($time)-2,strlen($time)));
+	}
+	$stamp1=mktime($hour,$minute);
+						
+	if(strlen($msg)==4)
+		$msg="0".$msg;
+	
+	return $msg;
+}
+
+function add_time($time, $offset)
+{
+	$msg="";
+	
+	if(is_null($time)||($time==0)||($time=="0"))
+		$msg="00:00";
+	if(is_null($offset)) $time2="00";
+	$stamp2=mktime(0,$time2);
+	
+	$time1=explode(":", $msg);
+	
+	$stamp1=0;
+	
+	if(count($time1)==2)
+	{
+		$stamp1=mktime($time1[0], $time1[1]);
+	}
+	if(strlen($msg)==4)
+		$msg="0".$msg;
+	return $msg;
+}
+
+/**
  * Convert Delhi Tcolor to HTML color format
  * @param int $delphi_color
  * @return string
@@ -261,7 +316,7 @@ function show_plsubj()
 	global $config;
 	print '<p>Список дней для сетки расписания:</p>';
 	/* ================= input validation ================= */
-	//input_validate_input_number(get_request_var("id"));
+	input_validate_input_number(get_request_var("id"));
 	/* ==================================================== */
 	
 	$PL_SUBJ_ID=0;
@@ -326,9 +381,13 @@ function show_plsubj()
 		$date=date("Ymd");
 	}
 
+	echo "<p>";
 	print_calendar("planning.php?action=plsubj&id=".$PL_SUBJ_ID);
+	echo "&nbsp</p>";
+	
 	$full_day=web_day_generate($PL_SUBJ_ID, $date);
 	//print_r($full_day);
+	echo "<p>Расписание на  ".date("Y.m.d",strtotime($date))."</p>";
 	
 	web_day_show($full_day);
 	
@@ -500,6 +559,11 @@ START_TIME			Label=Время начала раб. дня
 	return $msg;
 }
 
+/**
+ * debug function
+ * @param int $PL_AGEND_ID
+ * @param string $date
+ */
 function show_agend($PL_AGEND_ID, $date="")
 {
 	/* ================= input validation ================= */
@@ -540,6 +604,7 @@ function show_agend($PL_AGEND_ID, $date="")
 		print "<td>DAY_EVEN</td><td>DAY_MONTH</td><td>DAY_OF_MONTH</td><td>DAY_OF_WEEK</td>";
 		print "<td>DAY_WEEK</td><td>DAY_WEEK_MONTH</td><td>DAY_YEAR</td>";
 		print "<td>PERIOD_FROM</td><td>PERIOD_TO</td>";
+		print "<td>DUREE_TRANCHE</td>";
 		print "<td>message</td>";
 		print "</tr> \n";
 		
@@ -557,6 +622,7 @@ function show_agend($PL_AGEND_ID, $date="")
 			print "<td>".$row['DAY_EVEN']."</td><td>".$row['DAY_MONTH']."</td><td>".$row['DAY_OF_MONTH']."</td><td>".$row['DAY_OF_WEEK']."</td>";
 			print "<td>".$row['DAY_WEEK']."</td><td>".$row['DAY_WEEK_MONTH']."</td><td>".$row['DAY_YEAR']."</td>";
 			print "<td>".$row['PERIOD_FROM']."</td><td>".$row['PERIOD_TO']."</td>";
+			print "<td>".$row['DUREE_TRANCHE']."</td>";
 			$msg=pl_day_get_message($row);
 			print "<td>".$msg."</td>";
 			print "</tr> \n";
@@ -710,6 +776,7 @@ function pl_agend_show_array($arr)
 		print "<td>DAY_EVEN</td><td>DAY_MONTH</td><td>DAY_OF_MONTH</td><td>DAY_OF_WEEK</td>";
 		print "<td>DAY_WEEK</td><td>DAY_WEEK_MONTH</td><td>DAY_YEAR</td>";
 		print "<td>PERIOD_FROM</td><td>PERIOD_TO</td>";
+		print "<td>DUREE_TRANCHE</td>";
 		print "<td>message</td>";
 		print "</tr> \n";
 		
@@ -729,6 +796,7 @@ function pl_agend_show_array($arr)
 			print "<td>".$row['DAY_EVEN']."</td><td>".$row['DAY_MONTH']."</td><td>".$row['DAY_OF_MONTH']."</td><td>".$row['DAY_OF_WEEK']."</td>";
 			print "<td>".$row['DAY_WEEK']."</td><td>".$row['DAY_WEEK_MONTH']."</td><td>".$row['DAY_YEAR']."</td>";
 			print "<td>".$row['PERIOD_FROM']."</td><td>".$row['PERIOD_TO']."</td>";
+			print "<td>".$row['DUREE_TRANCHE']."</td>";
 			$msg=pl_day_get_message($row);
 			print "<td>".$msg."</td>";
 			print "</tr> \n";
@@ -1353,15 +1421,22 @@ function print_calendar($pagename)
 	$date_format = 'Ymd';
 	//$pagename=basename($_SERVER["REQUEST_URI"]);
 	//----------
-	$month = isset($_GET['month'])? $_GET['month'] : date('n');
-	$pd = mktime (0,0,0,$month,1,date('Y'));// timestamp of the first day
-	$zd = -(date('w', $pd)? (date('w', $pd)-1) : 6)+1;// monday before
-	$kd = date('t', $pd);// last day of moth
+	//$month = isset($_GET['month'])? $_GET['month'] : date('n');
+	$selected=isset($_GET['date'])? $_GET['date'] : date($date_format);
+	if(!is_date($selected))
+		$selected=date($date_format);
+	$month = date('n',strtotime($selected));
+	$pd = mktime (0,0,0,$month,1,date('Y'));			// timestamp of the first day
+	$zd = -(date('w', $pd)? (date('w', $pd)-1) : 6)+1;	// monday before
+	$kd = date('t', $pd);								// last day of moth
+	//$prev_last_day=mktime(0,0,0,$month-1,$pd-1,date('Y'));	// timestamp of the last day of previous month
+	$prev_month_day=strtotime($selected." -1 month");	// timestamp of the day of previous month
+	$next_month_day=strtotime($selected." +1 month");	// timestamp of the day of next month
 	echo '
     <div class="month_title">
-      <a href="'.$pagename.'?month='.($month-1).'" class="month_move">&laquo;</a>
+      <a href="'.$pagename.'&date='.date($date_format,$prev_month_day).'" class="month_move">&laquo;</a>
       <div class="month_name">'.$month_names[date('n', mktime(0,0,0,$month,1,date('Y')))].' '.date('Y', mktime(0,0,0,$month,1,date('Y'))).'</div>
-      <a href="'.$pagename.'?month='.($month+1).'" class="month_move">&raquo;</a>
+      <a href="'.$pagename.'&date='.date($date_format,$next_month_day).'" class="month_move">&raquo;</a>
       <div class="r"></div>
     </div>';
 	for ($d=0;$d<7;$d++) {
@@ -1373,7 +1448,10 @@ function print_calendar($pagename)
 	for ($d=$zd;$d<=$kd;$d++) {
 		$i = mktime (0,0,0,$month,$d,date('Y'));
 		if ($i >= $pd) {
-			$today = (date('Ymd') == date('Ymd', $i))? '_today' : '';
+			if(date('Ymd') == date('Ymd', $i))
+				$today = '_today';
+			 else 
+				$today = (date('Ymd',strtotime($selected)) == date('Ymd', $i))? '_selected' : '';
 			$minulost = (date('Ymd') >= date('Ymd', $i+86400)) && !$allow_past;
 			echo '
     <div class="day'.$today.'">'.($minulost? date('j', $i) : '<a title="'.date('Ymd', $i).'" href="'.$pagename."&date=".date($date_format, $i).'">'.date('j', $i).'</a>').'</div>';

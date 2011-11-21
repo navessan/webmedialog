@@ -45,7 +45,7 @@ a:hover {
   width: 22px;
   height: 22px;
 }
-.day, .day_today {
+.day, .day_today, .day_selected{
   float:left;
   width: 18px;
   height: 18px;
@@ -58,6 +58,10 @@ a:hover {
 }
 .day_today {
   border: 1px solid #CC0000;
+  font-weight: bold;
+}
+.day_selected {
+  border: 1px solid #00FF00;
   font-weight: bold;
 }
 .r {
