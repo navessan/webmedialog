@@ -149,7 +149,8 @@ array("sql"=>"number","name"=>"Ќомер полиса","value"=>"","type"=>"text")
 
 $month_array=array(
 array("sql"=>"0811","name"=>"август 2011"),
-array("sql"=>"0911","name"=>"сент€брь 2011")
+array("sql"=>"0911","name"=>"сент€брь 2011"),
+array("sql"=>"1011","name"=>"окт€брь 2011")
 );
 
 echo '<form method=post>

@@ -33,7 +33,7 @@
    @arg $db_type - the type of database server to connect to
    @arg $retries - the number a time the server should attempt to connect before failing
    @returns - (bool) '1' for success, '0' for error */
-function db_connect_real($host, $user, $pass, $db_name, $db_type, $port, $retries = 1) {
+function db_connect_real($host, $user, $pass, $db_name, $db_type, $port, $retries = 5) {
 	global $cnn_id;
 
 	$i = 1;
