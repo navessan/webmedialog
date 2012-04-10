@@ -18,7 +18,7 @@
  */
 ?>
 
-	<div align="right"><small>&copy; 2011 cprzd.ru</small></div>
+	<div align="right"><small>&copy; 2012 cprzd.ru</small></div>
 </body>
 </html>
 

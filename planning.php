@@ -383,7 +383,7 @@ function show_plsubj()
 
 	echo "<p>";
 	print_calendar("planning.php?action=plsubj&id=".$PL_SUBJ_ID);
-	echo "&nbsp</p>";
+	echo "\n&nbsp</p>\n";
 	
 	$full_day=web_day_generate($PL_SUBJ_ID, $date);
 	//print_r($full_day);
@@ -577,11 +577,12 @@ function show_agend($PL_AGEND_ID, $date="")
 	 ,PL_DAY.START_TIME, PL_DAY.END_TIME 
 	 ,DAY_EVEN, DAY_MONTH, DAY_OF_MONTH, DAY_OF_WEEK, DAY_ORDER, DAY_WEEK, DAY_WEEK_MONTH, DAY_YEAR
 	 ,PERIOD_FROM, PERIOD_TO
-	 ,DUREE_TRANCHE 
+	 ,DUREE_TRANCHE
+	 ,ENABLED 	  
 	 FROM pl_day 
 	 WHERE 
-	 PL_DAY.ENABLED=1 
-	 and pl_agend_id in (".$PL_AGEND_ID.") ";
+	 /*PL_DAY.ENABLED=1 
+	 and */pl_agend_id in (".$PL_AGEND_ID.") ";
 	
 	if(strlen($date)>0) $tsql.="
 	 and (PERIOD_FROM <= '".$date."' and PERIOD_TO >= '".$date."')";
@@ -605,6 +606,7 @@ function show_agend($PL_AGEND_ID, $date="")
 		print "<td>DAY_WEEK</td><td>DAY_WEEK_MONTH</td><td>DAY_YEAR</td>";
 		print "<td>PERIOD_FROM</td><td>PERIOD_TO</td>";
 		print "<td>DUREE_TRANCHE</td>";
+		echo "<td>ENABLED</td>";		
 		print "<td>message</td>";
 		print "</tr> \n";
 		
@@ -623,6 +625,7 @@ function show_agend($PL_AGEND_ID, $date="")
 			print "<td>".$row['DAY_WEEK']."</td><td>".$row['DAY_WEEK_MONTH']."</td><td>".$row['DAY_YEAR']."</td>";
 			print "<td>".$row['PERIOD_FROM']."</td><td>".$row['PERIOD_TO']."</td>";
 			print "<td>".$row['DUREE_TRANCHE']."</td>";
+			print "<td>".$row['ENABLED']."</td>";				
 			$msg=pl_day_get_message($row);
 			print "<td>".$msg."</td>";
 			print "</tr> \n";
@@ -770,15 +773,16 @@ function pl_agend_show_array($arr)
 	width="100%">
 	<tbody>';
 			
-		print "<tr> \n";
-		print "<td>PL_DAY_ID</td><td>Name</td>";
-		print "<td>START_TIME</td><td>END_TIME</td>";
-		print "<td>DAY_EVEN</td><td>DAY_MONTH</td><td>DAY_OF_MONTH</td><td>DAY_OF_WEEK</td>";
-		print "<td>DAY_WEEK</td><td>DAY_WEEK_MONTH</td><td>DAY_YEAR</td>";
-		print "<td>PERIOD_FROM</td><td>PERIOD_TO</td>";
-		print "<td>DUREE_TRANCHE</td>";
-		print "<td>message</td>";
-		print "</tr> \n";
+		echo "<tr> \n";
+		echo "<td>PL_DAY_ID</td><td>Name</td>";
+		echo "<td>START_TIME</td><td>END_TIME</td>";
+		echo "<td>DAY_EVEN</td><td>DAY_MONTH</td><td>DAY_OF_MONTH</td><td>DAY_OF_WEEK</td>";
+		echo "<td>DAY_WEEK</td><td>DAY_WEEK_MONTH</td><td>DAY_YEAR</td>";
+		echo "<td>PERIOD_FROM</td><td>PERIOD_TO</td>";
+		echo "<td>DUREE_TRANCHE</td>";
+		echo "<td>ENABLED</td>";
+		echo "<td>message</td>";
+		echo "</tr> \n";
 		
 
 		//foreach ($arr as $row)
@@ -797,6 +801,7 @@ function pl_agend_show_array($arr)
 			print "<td>".$row['DAY_WEEK']."</td><td>".$row['DAY_WEEK_MONTH']."</td><td>".$row['DAY_YEAR']."</td>";
 			print "<td>".$row['PERIOD_FROM']."</td><td>".$row['PERIOD_TO']."</td>";
 			print "<td>".$row['DUREE_TRANCHE']."</td>";
+			print "<td>".$row['ENABLED']."</td>";			
 			$msg=pl_day_get_message($row);
 			print "<td>".$msg."</td>";
 			print "</tr> \n";
@@ -1115,7 +1120,9 @@ function planning_show_array($arr)
 			//print "<a href=\"planning.php?action=plday&id=".$row['PL_DAY_ID']."\">";
 			print $row['NAME'];
 			//print "</a></td>";
-			print "<td>".$row['PL_SUBJ_ID']."</td><td>".$row['DATE_CONS']."</td>";
+			print "<td>".$row['PL_SUBJ_ID']."</td>";
+			//echo "<td>".date('Y m d H:i:s',$row['DATE_CONS'])."</td>";
+			echo "<td>".$row['DATE_CONS']."</td>";
 			print "<td>".parse_time($row['HEURE'])."</td><td>".$row['DUREE']."</td>";
 			print "<td>".$row['PATIENTS_ID']."</td>";
 			print "<td>".$row['NOM']." ".$row['PRENOM']." ".$row['PATRONYME']." ".$row['COMMENTAIRE']."</td>";
@@ -1419,49 +1426,66 @@ function print_calendar($pagename)
 	$day_names = array('ом', 'бр', 'яп', 'вр', 'ор', 'яа', 'бя');
 	$allow_past = true;
 	$date_format = 'Ymd';
-	//$pagename=basename($_SERVER["REQUEST_URI"]);
-	//----------
-	//$month = isset($_GET['month'])? $_GET['month'] : date('n');
-	$selected=isset($_GET['date'])? $_GET['date'] : date($date_format);
+	
+	$selected=get_request_var('date');
+	
 	if(!is_date($selected))
 		$selected=date($date_format);
-	$month = date('n',strtotime($selected));
-	$pd = mktime (0,0,0,$month,1,date('Y'));			// timestamp of the first day
-	$zd = -(date('w', $pd)? (date('w', $pd)-1) : 6)+1;	// monday before
-	$kd = date('t', $pd);								// last day of moth
-	//$prev_last_day=mktime(0,0,0,$month-1,$pd-1,date('Y'));	// timestamp of the last day of previous month
-	$prev_month_day=strtotime($selected." -1 month");	// timestamp of the day of previous month
-	$next_month_day=strtotime($selected." +1 month");	// timestamp of the day of next month
+		
+	$month= date('n',strtotime($selected));
+	$year = date('Y',strtotime($selected));
+	
+	$pd = mktime (0,0,0, $month,1, $year);						// timestamp of the first day
+	$zd = -(date('w', $pd)? (date('w', $pd)-1) : 6)+1;			// monday before
+	$kd = date('t', $pd);										// last day of month
+	$curr_last_day=mktime(0,0,0,$month,$kd,$year);				// timestamp of the last day of current month
+	$sd = 7-date('w', $curr_last_day);							// sunday after
+	
+	$prev_month_day=strtotime($selected." -1 month");			// timestamp of the day of previous month
+	$next_month_day=strtotime($selected." +1 month");			// timestamp of the day of next month
+	
+	//echo "\n monday before=$zd, last day of month=$kd, sunday after=$sd \n";
+	
 	echo '
     <div class="month_title">
       <a href="'.$pagename.'&date='.date($date_format,$prev_month_day).'" class="month_move">&laquo;</a>
-      <div class="month_name">'.$month_names[date('n', mktime(0,0,0,$month,1,date('Y')))].' '.date('Y', mktime(0,0,0,$month,1,date('Y'))).'</div>
+      <div class="month_name">'.$month_names[date('n', mktime(0,0,0,$month,1,$year))].' '.date('Y', mktime(0,0,0,$month,1,$year)).'</div>
       <a href="'.$pagename.'&date='.date($date_format,$next_month_day).'" class="month_move">&raquo;</a>
       <div class="r"></div>
     </div>';
+	
 	for ($d=0;$d<7;$d++) {
-		echo '
-    <div class="week_day">'.$day_names[$d].'</div>';
+		echo "\n    <div class=\"week_day\">".$day_names[$d]."</div>";
 	}
-	echo '
-    <div class="r"></div>';
-	for ($d=$zd;$d<=$kd;$d++) {
-		$i = mktime (0,0,0,$month,$d,date('Y'));
-		if ($i >= $pd) {
+	
+	echo "\n    <div class=\"r\"></div>";
+	for ($d=$zd;$d<=($kd+$sd);$d++) {
+		$i = mktime (0,0,0,$month,$d,$year);
+		
+		if (($i >= $pd)&&($i <= $curr_last_day)) 
+		{
+			$day_style = '';
 			if(date('Ymd') == date('Ymd', $i))
-				$today = '_today';
-			 else 
-				$today = (date('Ymd',strtotime($selected)) == date('Ymd', $i))? '_selected' : '';
-			$minulost = (date('Ymd') >= date('Ymd', $i+86400)) && !$allow_past;
-			echo '
-    <div class="day'.$today.'">'.($minulost? date('j', $i) : '<a title="'.date('Ymd', $i).'" href="'.$pagename."&date=".date($date_format, $i).'">'.date('j', $i).'</a>').'</div>';
-		} else {
-			echo '
-    <div class="no_day">&nbsp;</div>';
+				$day_style = '_today';
+			else if(strtotime($selected) == $i)
+			 	$day_style = '_selected';
+		} else 
+		{
+			//echo "\n	<div class=\"no_day\">&nbsp;</div>";
+			$day_style = '_other';
 		}
-		if (date('w', $i) == 0 && $i >= $pd) {
-			echo '
-    <div class="r"></div>';
+		$minulost = (date('Ymd') >= date('Ymd', $i+86400)) && !$allow_past;	//wtf?
+		$day_text='';
+		if($minulost)
+			$day_text=date('j', $i);
+		else
+			$day_text='<a title="'.date('Ymd', $i).'" href="'.$pagename."&date=".date($date_format, $i).'">'.date('j', $i).'</a>';
+			
+		echo "\n	<div class=\"day".$day_style.'">'.$day_text.'</div>';
+
+		if (date('w', $i) == 0 && $i >= $pd) 
+		{
+			echo "\n	<div class=\"r\"></div>";
 		}
 	}
 }
