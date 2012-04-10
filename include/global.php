@@ -52,6 +52,15 @@ if (isset($config["version"])) {
 	exit;
 }
 
+/* display ALL errors,
+ * but suppress deprecated warnings as a workaround until 088 */
+/*
+if (defined("E_DEPRECATED")) {
+	error_reporting(E_ALL ^ E_DEPRECATED);
+}else{
+	error_reporting(E_ALL);
+}
+*/
 
 /* Files that do not need http header information - Command line scripts */
 $no_http_header_files = array();	
@@ -146,8 +155,13 @@ $colors = array();
 $config["server_os"] = (strstr(PHP_OS, "WIN")) ? "win32" : "unix";
 
 /* used for includes */
-$config["base_path"] = strtr(ereg_replace("(.*)[\\\/]include", "\\1", dirname(__FILE__)), "\\", "/");
-$config["library_path"] = ereg_replace("(.*[\\\/])include", "\\1lib", dirname(__FILE__));
+if ($config["server_os"] == "win32") {
+	$config["base_path"]    = str_replace("\\", "/", substr(dirname(__FILE__),0,-8));
+	$config["library_path"] = $config["base_path"] . "/lib";
+}else{
+	$config["base_path"]    = preg_replace("/(.*)[\/]include/", "\\1", dirname(__FILE__));
+	$config["library_path"] = preg_replace("/(.*[\/])include/", "\\1lib", dirname(__FILE__));
+}
 $config["include_path"] = dirname(__FILE__);
 
 /* current version */
@@ -265,6 +279,5 @@ include_once($config["library_path"] . "/html_utility.php");
 include_once($config["library_path"] . "/html_validate.php");
 //include_once($config["library_path"] . "/variables.php");
 //include_once($config["library_path"] . "/auth.php");
-
 
 ?>
