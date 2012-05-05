@@ -1,3 +1,5 @@
-#Thu Jun 09 19:07:07 MSD 2011
+#Sun Apr 22 18:53:09 GST 2012
 eclipse.preferences.version=1
 include_path=0;/planning
+phpVersion=php5.3
+use_asp_tags_as_php=false

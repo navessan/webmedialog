@@ -1347,4 +1347,16 @@ function sanitize_search_string($string) {
 	return $string;
 }
 
+function recursive_iconv($in_charset, $out_charset, $arr){
+        if (!is_array($arr)){
+            return iconv($in_charset, $out_charset, $arr);
+        }
+        $ret = $arr;
+        function array_iconv(&$val, $key, $userdata){
+            $val = iconv($userdata[0], $userdata[1], $val);
+        }
+        array_walk_recursive($ret, "array_iconv", array($in_charset, $out_charset));
+        return $ret;
+    } 
+
 ?>
