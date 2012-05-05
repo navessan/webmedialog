@@ -31,18 +31,30 @@ switch ($_REQUEST["action"]) {
 
 		break;
 	case 'dep':
-		include_once("./include/header.php");
-
-		show_plan();
-
-		include_once("./include/footer.php");
+		if(get_request_var("xml")==1) 
+		{
+			header('Content-type: text/xml');
+			show_plan_xml();
+		}
+		else 
+		{
+			include_once("./include/header.php");
+			show_plan();
+			include_once("./include/footer.php");
+		}
 		break;
 	case 'plsubj':
-		include_once("./include/header.php");
-
-		show_plsubj();
-
-		include_once("./include/footer.php");
+		if(get_request_var("xml")==1) 
+		{
+			header('Content-type: text/xml');
+			show_plsubj_xml();
+		}
+		else 
+		{
+			include_once("./include/header.php");
+			show_plsubj();
+			include_once("./include/footer.php");
+		}
 		break;
 	case 'plday':
 		include_once("./include/header.php");
@@ -52,11 +64,17 @@ switch ($_REQUEST["action"]) {
 		include_once("./include/footer.php");
 		break;
 	default:
-		include_once("./include/header.php");
-
-		show_deps();
-
-		include_once("./include/footer.php");
+		if(get_request_var("xml")==1)
+		{
+			header('Content-type: text/xml');
+			show_deps_xml();
+		}
+		else
+		{
+			include_once("./include/header.php");
+			show_deps();
+			include_once("./include/footer.php");
+		}
 		break;
 }
 
@@ -96,6 +114,9 @@ function parse_time2($time)
 	
 	$time_arr=explode(":",$time, 2);
 	
+	$hour=0;
+	$minute=0;
+	
 	if(count($time_arr)==2)
 	{
 		$hour=$time_arr[0];
@@ -103,36 +124,34 @@ function parse_time2($time)
 	}
 	else 
 	{
-		$stamp1=mktime(substr($time, 0,strlen($time)-2),
-						substr($time,strlen($time)-2,strlen($time)));
+		if(strlen($time)>2){
+			$hour=substr($time, 0,strlen($time)-2);
+			$minute=substr($time,strlen($time)-2,strlen($time));
+		}else
+			$minute=$time;
 	}
 	$stamp1=mktime($hour,$minute);
-						
-	if(strlen($msg)==4)
-		$msg="0".$msg;
 	
+	$msg=date("H:i",$stamp1);
+		
 	return $msg;
 }
 
-function add_time($time, $offset)
+function add_time($time, $minutes_offset)
 {
 	$msg="";
-	
-	if(is_null($time)||($time==0)||($time=="0"))
-		$msg="00:00";
-	if(is_null($offset)) $time2="00";
-	$stamp2=mktime(0,$time2);
-	
-	$time1=explode(":", $msg);
-	
 	$stamp1=0;
 	
-	if(count($time1)==2)
-	{
-		$stamp1=mktime($time1[0], $time1[1]);
-	}
-	if(strlen($msg)==4)
-		$msg="0".$msg;
+	$time=parse_time2($time);
+	
+	$time_arr=explode(":",$time, 2);
+		
+	$hour=$time_arr[0];
+	$minute=$time_arr[1];
+	
+	$stamp1=mktime($hour,$minute+$minutes_offset);
+	
+	$msg=date("H:i",$stamp1);
 	return $msg;
 }
 
@@ -157,8 +176,49 @@ function delphi_color_to_html($delphi_color)
 	return $html_color;
 }
 
-
 function show_deps()
+{
+
+	print '<p>Список отделений:</p>';
+
+	$arr = pl_param_get_array();
+
+	if (sizeof($arr) > 0)
+	{
+		pl_param_show_array($arr);
+	}else
+	{
+		print "<tr><td><em>Нет доступа к отделениям</em></td></tr>";
+	}
+
+
+}
+
+function show_deps_xml()
+{
+	$arr = pl_param_get_array();
+
+	if (sizeof($arr) > 0)
+	{
+		$in_charset="cp1251";
+		$out_charset="UTF-8";
+
+		$arr=recursive_iconv($in_charset, $out_charset, $arr);
+		$xml=export_xml($arr,"pl_params","pl_param",'1.0',$out_charset);
+
+		if($xml)
+			echo $xml;
+		else
+			echo "xml failed\n";
+	}else
+	{
+		//print "<tr><td><em>Нет доступа к отделениям</em></td></tr>";
+	}
+
+
+}
+
+function pl_param_get_array()
 {
 	global $WEB_MEDECINS_ID;
 	$sql_where="";
@@ -175,10 +235,20 @@ function show_deps()
  (PL_PARAM.ARCHIVE not in (1)) 
  order by nom";
 
-	print '<p>Список отделений:</p>';
-
 	$arr = db_fetch_assoc($tsql);
 
+	if (sizeof($arr) > 0)
+	{
+		return $arr;
+	}
+	else
+	{
+		return null;
+	}
+}
+
+function pl_param_show_array($arr)
+{
 	if (sizeof($arr) > 0)
 	{
 
@@ -206,14 +276,8 @@ function show_deps()
 	</table>";
 
 
-	}else
-	{
-		print "<tr><td><em>Нет доступа к отделениям</em></td></tr>";
 	}
-
-
 }
-
 
 function show_plan()
 {
@@ -253,7 +317,88 @@ function show_plan()
 		//exit
 		return;		
 	}
+	
+	//----------------
 
+	$arr = pl_subj_param_get_array($PL_PARAM_ID);
+
+	if (sizeof($arr) > 0)
+	{
+		pl_subj_param_show_array($arr);
+	}else
+	{
+		print "<tr><td><em>Нет доступа к расписаниям</em></td></tr>";
+	}
+}
+
+function show_plan_xml()
+{
+	global $WEB_MEDECINS_ID;
+	/* ================= input validation ================= */
+	input_validate_input_number(get_request_var("id"));
+	/* ==================================================== */
+
+	if (empty($_GET["id"]))
+	{
+		//print '<p>Не выбрано отделение:</p>';
+		return;
+	}
+	else
+	$PL_PARAM_ID=$_GET["id"];
+	
+	//-----------
+	//show department name and check user access
+	$tsql="SELECT PL_PARAM.PL_PARAM_ID, PL_PARAM.NOM , FM_ORG.LABEL ".
+		"FROM PL_PARAM PL_PARAM ". 
+		"LEFT OUTER JOIN FM_ORG FM_ORG ON FM_ORG.FM_ORG_ID = PL_PARAM.FM_INTORG_ID ". 
+		"JOIN MED_PLPARAM MED_PLPARAM ON PL_PARAM.PL_PARAM_ID = MED_PLPARAM.PL_PARAM_ID ". 
+		"WHERE ".
+		"(MED_PLPARAM.MEDECINS_ID=(".$WEB_MEDECINS_ID.")) and PL_PARAM.PL_PARAM_ID=".$PL_PARAM_ID.
+		" and (PL_PARAM.ARCHIVE not in (1)) ". 
+		"order by nom";
+
+	$arr=db_fetch_row($tsql);
+	if (sizeof($arr) > 0)
+	{
+		//print "<p><a href=\"planning.php\">".$arr['LABEL']."</a> >> ".$arr['NOM']."</p>";
+	}
+	else 
+	{
+		//print "<tr><td><em>Нет доступа к расписаниям</em></td></tr>";
+		//exit
+		return;		
+	}
+	
+	//----------------
+
+	$arr = pl_subj_param_get_array($PL_PARAM_ID);
+
+	if (sizeof($arr) > 0)
+	{
+		$in_charset="cp1251";
+		$out_charset="UTF-8";
+
+		$arr=recursive_iconv($in_charset, $out_charset, $arr);
+		$xml=export_xml($arr,"pl_subjects","pl_subj",'1.0',$out_charset);
+
+		if($xml)
+			echo $xml;
+		else
+			echo "xml failed\n";
+
+	}else
+	{
+		//print "<tr><td><em>Нет доступа к расписаниям</em></td></tr>";
+	}
+}
+
+function pl_subj_param_get_array($PL_PARAM_ID)
+{
+	/* ================= input validation ================= */
+	input_validate_input_number($PL_PARAM_ID);
+	/* ==================================================== */
+	if(!$PL_PARAM_ID>0) return null;
+	
 	//-----------
 	//запрос списка расписаний для выбранного отделения
 
@@ -268,6 +413,18 @@ function show_plan()
 
 	$arr = db_fetch_assoc($tsql);
 
+	if (sizeof($arr) > 0)
+	{
+		return $arr;
+	}
+	else
+	{
+		return null;
+	}
+}
+
+function pl_subj_param_show_array($arr)
+{
 	if (sizeof($arr) > 0)
 	{
 
@@ -305,9 +462,6 @@ function show_plan()
 		print "	</tbody>
 	</table>";
 
-	}else
-	{
-		print "<tr><td><em>Нет доступа к расписаниям</em></td></tr>";
 	}
 }
 
@@ -388,6 +542,7 @@ function show_plsubj()
 	$full_day=web_day_generate($PL_SUBJ_ID, $date);
 	//print_r($full_day);
 	echo "<p>Расписание на  ".date("Y.m.d",strtotime($date))."</p>";
+	echo "<p><a href=\"planning.php?action=plsubj&id=$PL_SUBJ_ID&date=$date&xml=1\">xml</a></p>";
 	
 	web_day_show($full_day);
 	
@@ -406,6 +561,81 @@ function show_plsubj()
 	print("<p>debug2</p>");
 	show_agend($PL_AGEND_ID);
 	pl_excl_show($PL_SUBJ_ID);
+		
+}
+
+function show_plsubj_xml()
+{
+	global $config;
+
+	/* ================= input validation ================= */
+	input_validate_input_number(get_request_var("id"));
+	/* ==================================================== */
+	
+	$PL_SUBJ_ID=0;
+
+	if (!empty($_GET["id"]))
+	{
+			$PL_SUBJ_ID=$_GET["id"];
+	}
+	
+	if (!$PL_SUBJ_ID>0)
+	{
+		//print '<p>Не выбрана сетка расписания:</p>';
+		return;
+	}
+	
+	//-----------
+	//show planning name
+	$tsql="select PL_SUBJ.PL_SUBJ_ID, PL_SUBJ.NAME SUBJ_NAME, PL_AGEND_ID1 
+	 , PL_PARAM.PL_PARAM_ID DEP_ID, PL_PARAM.NOM DEP_NAME
+	 , FM_ORG.LABEL ORG_NAME
+	 from PL_SUBJ
+	 inner join PL_SUBJ_PARAM on PL_SUBJ_PARAM.PL_SUBJ_ID=PL_SUBJ.PL_SUBJ_ID
+	 inner join PL_PARAM PL_PARAM ON PL_PARAM.PL_PARAM_ID=PL_SUBJ_PARAM.PL_PARAM_ID
+	 inner JOIN FM_ORG FM_ORG ON FM_ORG.FM_ORG_ID = PL_PARAM.FM_INTORG_ID
+	 where PL_SUBJ.PL_SUBJ_ID in(".$PL_SUBJ_ID.")
+	 and(PL_SUBJ.ARCHIVE not in (1)) ";
+	
+	//TODO check_web_access
+	
+	if($config["check_web_access"]>0)
+	{	
+		$tsql.=" and PL_SUBJ.web_access>0 ";
+	}
+	$tsql.=" order by NAME";
+
+	$arr=db_fetch_row($tsql);
+	if (empty($arr))
+	{
+		//empty array, no access
+ 		return;
+	}
+
+	//-----------
+	$date="";
+	if (!empty($_GET["date"]))
+	{
+		$date=$_GET["date"];
+	}
+	
+	if(!is_date($date))
+	{
+		$date=date("Ymd");
+	}
+
+	$full_day=web_day_generate($PL_SUBJ_ID, $date);
+	
+	$in_charset="cp1251";
+	$out_charset="UTF-8";
+	
+	$full_day=recursive_iconv($in_charset, $out_charset, $full_day);
+	$xml=export_xml($full_day,"events","event",'1.0',$out_charset);	
+
+	if($xml)
+		echo $xml;
+	else
+		echo "xml failed\n";
 		
 }
 
@@ -1045,7 +1275,7 @@ function planning_show($PL_SUBJ_ID, $date="")
 
 	if (sizeof($arr) > 0)
 	{
-		planning_show_array($arr);		
+		planning_show_array($arr);
 	}
 	else
 	{
@@ -1121,9 +1351,10 @@ function planning_show_array($arr)
 			print $row['NAME'];
 			//print "</a></td>";
 			print "<td>".$row['PL_SUBJ_ID']."</td>";
-			//echo "<td>".date('Y m d H:i:s',$row['DATE_CONS'])."</td>";
-			echo "<td>".$row['DATE_CONS']."</td>";
-			print "<td>".parse_time($row['HEURE'])."</td><td>".$row['DUREE']."</td>";
+			echo "<td>".date("Y-m-d", strtotime($row['DATE_CONS']))."</td>";
+			//echo "<td>".$row['DATE_CONS']."</td>";
+			echo "<td>".parse_time($row['HEURE'])." [".parse_time2($row['HEURE'])."</td>";
+			echo "<td>".$row['DUREE']." [".add_time($row['HEURE'],$row['DUREE'])."</td>";
 			print "<td>".$row['PATIENTS_ID']."</td>";
 			print "<td>".$row['NOM']." ".$row['PRENOM']." ".$row['PATRONYME']." ".$row['COMMENTAIRE']."</td>";
 			//print "<td>".$row['DAY_WEEK']."</td><td>".$row['DAY_WEEK_MONTH']."</td><td>".$row['DAY_YEAR']."</td>";
@@ -1353,6 +1584,10 @@ function web_day_generate($PL_SUBJ_ID, $date)
 		}
 	}
 	//------------------
+	//получаем временное деление сетки DUREE_TRANCHE
+	//TODO get DUREE_TRANCHE for day
+	
+	//------------------
 	//получаем записи в расписание за день
 	$arr=null;
 	$arr = planning_get_array($PL_SUBJ_ID,$date);
@@ -1366,7 +1601,7 @@ function web_day_generate($PL_SUBJ_ID, $date)
 		{
 			$key =parse_time($row['HEURE']);
 			$full_day[$key]['START_TIME']=parse_time($row['HEURE']); 
-			$full_day[$key]['END_TIME']=''; 
+			$full_day[$key]['END_TIME']=add_time($row['HEURE'],$row['DUREE']); 
 			$full_day[$key]['DUREE']=$row['DUREE'];
 			$full_day[$key]['TYPE']=''; 
 			$full_day[$key]['NAME']=$row['NAME']." ".$row['NOM']." ".$row['PRENOM']." ".$row['PATRONYME']." ".$row['COMMENTAIRE'];
@@ -1474,7 +1709,7 @@ function print_calendar($pagename)
 			//echo "\n	<div class=\"no_day\">&nbsp;</div>";
 			$day_style = '_other';
 		}
-		$minulost = (date('Ymd') >= date('Ymd', $i+86400)) && !$allow_past;	//wtf?
+		$minulost = (date('Ymd') >= date('Ymd', $i+86400)) && !$allow_past;	//wtf in last period?
 		$day_text='';
 		if($minulost)
 			$day_text=date('j', $i);
@@ -1489,5 +1724,116 @@ function print_calendar($pagename)
 		}
 	}
 }
+
+
+/**
+ * Print array in XML format
+ * array must be 2-dimensional
+ * @param array $arr
+ */
+function export_xml($arr, $startElement = 'elements',$ElementName = 'element', $xml_version = '1.0', $xml_encoding = 'UTF-8')
+{
+    if(!is_array($arr)){
+        $err = 'Invalid variable type supplied, expected array not found on line '.__LINE__." in Class: ".__CLASS__." Method: ".__METHOD__;
+        trigger_error($err);
+        if($this->_debug) echo $err;
+        return false; //return false error occurred
+    }
+	$xml = new XMLWriter();
+	//$xml->openURI("php://output");
+    $xml->openMemory();
+	$xml->startDocument($xml_version, $xml_encoding);
+	$xml->setIndent(true);
+
+	$xml->startElement($startElement);
+
+	foreach ($arr as $row)
+	{
+		$xml->startElement($ElementName);
+		foreach($row as $key => $value)
+		{
+			//echo "<$key>$value</$key>";
+			$xml->writeAttribute($key, $value."");
+			//$xml->writeElement($key, $value."");
+		}
+		$xml->writeRaw("");
+		$xml->endElement();
+	}
+
+    $xml->endElement();//write end element
+    
+    //header('Content-type: text/xml');
+	//$xml->flush();
+    
+	//returns the XML results
+    return $xml->outputMemory(true);
+}
+
+/**
+ * Build A XML Data Set
+ *
+ * @param array $data Associative Array containing values to be parsed into an XML Data Set(s)
+ * @param string $startElement Root Opening Tag, default fx_request
+ * @param string $xml_version XML Version, default 1.0
+ * @param string $xml_encoding XML Encoding, default UTF-8
+ * @return string XML String containig values
+ * @return mixed Boolean false on failure, string XML result on success
+ */
+function arrayToXML($data, $startElement = 'fx_request', $xml_version = '1.0', $xml_encoding = 'UTF-8'){
+    if(!is_array($data)){
+        $err = 'Invalid variable type supplied, expected array not found on line '.__LINE__." in Class: ".__CLASS__." Method: ".__METHOD__;
+        trigger_error($err);
+        if($this->_debug) echo $err;
+        return false; //return false error occurred
+    }
+    $xml = new XmlWriter();
+    $xml->openMemory();
+    $xml->startDocument($xml_version, $xml_encoding);
+    $xml->startElement($startElement);
+
+    /**
+     * Write XML as per Associative Array
+     * @param object $xml XMLWriter Object
+     * @param array $data Associative Data Array
+     */
+    function write(XMLWriter $xml, $data){
+        foreach($data as $key => $value){
+            if (is_array($value) && isset($value[0])){
+                foreach($value as $itemValue){
+                    //$xml->writeElement($key, $itemValue);
+
+                    if(is_array($itemValue)){
+                        $xml->startElement($key);
+                        write($xml, $itemValue);
+                        $xml->endElement();
+                        continue;
+                    } 
+
+                    if (!is_array($itemValue)){
+                        $xml->writeElement($key, $itemValue."");
+                    }
+                }
+            }else if(is_array($value)){
+            	//echo "key=$key";
+                $xml->startElement($key);
+                write($xml, $value);
+                $xml->endElement();
+                continue;
+            } 
+
+            if (!is_array($value)){
+                $xml->writeElement($key, $value."");
+            }
+        }
+    }
+    write($xml, $data);
+
+    $xml->endElement();//write end element
+    //returns the XML results
+    return $xml->outputMemory(true);
+}
+
+
+
 
 ?>
