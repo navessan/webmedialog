@@ -23,6 +23,11 @@ include("./include/auth.php");
 /* set default action */
 if (!isset($_REQUEST["action"])) { $_REQUEST["action"] = ""; }
 
+if(get_request_var("xml")==1) 
+	header('Content-type: text/xml');
+else 
+	include_once("./include/header.php");
+
 switch ($_REQUEST["action"]) {
 	case 'save':
 
@@ -32,51 +37,33 @@ switch ($_REQUEST["action"]) {
 		break;
 	case 'dep':
 		if(get_request_var("xml")==1) 
-		{
-			header('Content-type: text/xml');
 			show_plan_xml();
-		}
 		else 
-		{
-			include_once("./include/header.php");
 			show_plan();
-			include_once("./include/footer.php");
-		}
+
 		break;
 	case 'plsubj':
 		if(get_request_var("xml")==1) 
-		{
-			header('Content-type: text/xml');
 			show_plsubj_xml();
-		}
 		else 
-		{
-			include_once("./include/header.php");
 			show_plsubj();
-			include_once("./include/footer.php");
-		}
+
 		break;
 	case 'plday':
-		include_once("./include/header.php");
 
 		pl_day_show();
-
-		include_once("./include/footer.php");
 		break;
+		
 	default:
 		if(get_request_var("xml")==1)
-		{
-			header('Content-type: text/xml');
 			show_deps_xml();
-		}
 		else
-		{
-			include_once("./include/header.php");
 			show_deps();
-			include_once("./include/footer.php");
-		}
 		break;
 }
+
+if(!get_request_var("xml")==1) 
+	include_once("./include/footer.php");
 
 
 /**
