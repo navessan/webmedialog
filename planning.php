@@ -71,7 +71,7 @@ if(!get_request_var("xml")==1)
  * @param string $time
  * @return string
  */
-function parse_time($time)
+function parse_time_old($time)
 {
 	$msg="";
 	if(is_null($time)||($time==0)||($time=="0"))
@@ -91,7 +91,7 @@ function parse_time($time)
  * @param string $time
  * @return string
  */
-function parse_time2($time)
+function parse_time($time)
 {
 	$msg="";
 	$stamp1=0;
@@ -129,7 +129,7 @@ function add_time($time, $minutes_offset)
 	$msg="";
 	$stamp1=0;
 	
-	$time=parse_time2($time);
+	$time=parse_time($time);
 	
 	$time_arr=explode(":",$time, 2);
 		
@@ -379,6 +379,10 @@ function show_plan_xml()
 	}
 }
 
+/**
+ * запрос списка расписаний для выбранного отделения
+ * @param int $PL_PARAM_ID
+ */
 function pl_subj_param_get_array($PL_PARAM_ID)
 {
 	/* ================= input validation ================= */
@@ -1340,7 +1344,7 @@ function planning_show_array($arr)
 			print "<td>".$row['PL_SUBJ_ID']."</td>";
 			echo "<td>".date("Y-m-d", strtotime($row['DATE_CONS']))."</td>";
 			//echo "<td>".$row['DATE_CONS']."</td>";
-			echo "<td>".parse_time($row['HEURE'])." [".parse_time2($row['HEURE'])."</td>";
+			echo "<td>".parse_time($row['HEURE'])." [".parse_time($row['HEURE'])."</td>";
 			echo "<td>".$row['DUREE']." [".add_time($row['HEURE'],$row['DUREE'])."</td>";
 			print "<td>".$row['PATIENTS_ID']."</td>";
 			print "<td>".$row['NOM']." ".$row['PRENOM']." ".$row['PATRONYME']." ".$row['COMMENTAIRE']."</td>";
@@ -1401,6 +1405,53 @@ function pl_exam_get_array($PL_SUBJ_ID)
 	if (sizeof($arr) > 0)
 	{
 		return $arr;
+	}
+	else
+	{
+		return null;
+	}
+}
+
+/**
+ * Получаем минимальную и максимальную длительность событий, которые можно записывать в расписание $PL_SUBJ_ID 
+ * @param int $PL_SUBJ_ID
+ */
+
+function pl_exam_durees_get($PL_SUBJ_ID)
+{
+	/* ================= input validation ================= */
+	input_validate_input_number($PL_SUBJ_ID);
+	/* ==================================================== */
+	
+	if(!$PL_SUBJ_ID>0) return null;
+
+	$tsql="SELECT
+	min(DUREE) MinTime
+	,max(DUREE) MaxTime
+	 FROM
+	  PL_EXAM
+	  LEFT OUTER JOIN PL_SUBJ_EXAM ON PL_SUBJ_EXAM.PL_EXAM_ID = PL_EXAM.PL_EXAM_ID
+	 WHERE
+	  PL_SUBJ_ID in (".$PL_SUBJ_ID.")
+	 ";
+
+	$arr = db_fetch_row($tsql);
+
+	if (sizeof($arr) > 0)
+	{
+		$durees=array('MAX_DUREE'=>0, 
+					'MIN_DUREE'=>0);
+		
+		if(isset($arr['MinTime']))
+		{
+			$durees['MIN_DUREE']=$arr['MinTime'];
+		}
+		if(isset($arr['MaxTime']))
+		{
+			$durees['MAX_DUREE']=$arr['MaxTime'];
+		}
+		
+		return $durees;
 	}
 	else
 	{
@@ -1508,7 +1559,7 @@ function web_day_generate($PL_SUBJ_ID, $date)
 		$key =parse_time($row['END_TIME']);
 		$full_day[$key]['START_TIME']=parse_time($row['END_TIME']);
 		$full_day[$key]['END_TIME']=parse_time($row['END_TIME']);
-		$full_day[$key]['DUREE']='';
+		$full_day[$key]['DUREE']="интервал ".(string)($row['DUREE_TRANCHE']);
 		$full_day[$key]['TYPE']='';
 		$full_day[$key]['NAME']="Конец рабочего дня";
 		$full_day[$key]['COLOR']='';
@@ -1521,6 +1572,51 @@ function web_day_generate($PL_SUBJ_ID, $date)
 		//выходим сразу или получаем остальные события дня?
 		return $full_day;
 	}
+	
+	//------------------
+	//FIXME check duree_tranche
+	
+	//берем значение длительности из настроек дня
+	$duree_tranche=$row['DUREE_TRANCHE'];
+	
+	//если не указана длительность, то берем длительность событий расписания
+	if(!$duree_tranche>0)
+	{
+		$durees=pl_exam_durees_get($PL_SUBJ_ID);
+		
+		//что брать для сетки?
+		//минимальную длительность или максимальную?
+		
+		if($durees['MAX_DUREE']>0) 
+			$duree_tranche=$durees['MAX_DUREE'];
+		else if($durees['MIN_DUREE']>0) 
+			$duree_tranche=$durees['MIN_DUREE'];
+	}
+	
+	
+	$start_time =parse_time($row['START_TIME']);
+	$end_time =parse_time($row['END_TIME']);
+	
+	$cur_time=$start_time;
+	
+	echo "\n duree_tranche=".date(DATE_ATOM, strtotime($duree_tranche));
+	echo "\n cur_time=".date(DATE_ATOM, strtotime($cur_time));
+	echo "\n end_time=".date(DATE_ATOM, strtotime($end_time));
+	
+	while(($duree_tranche>0)&(strtotime($cur_time)<strtotime($end_time)))
+	{
+		$key =$cur_time;
+		$full_day[$key]['START_TIME']=$cur_time;
+		$full_day[$key]['END_TIME']=add_time($cur_time,$duree_tranche);
+		$full_day[$key]['DUREE']=$duree_tranche;
+		$full_day[$key]['TYPE']='';
+		$full_day[$key]['NAME']="Свободно";
+		$full_day[$key]['COLOR']='';
+		$full_day[$key]['WEB_ACCESS']='';
+		
+		$cur_time =add_time($cur_time,$duree_tranche);
+	}
+	
 	
 	//------------------
 	//получаем плановые события дня
@@ -1536,6 +1632,7 @@ function web_day_generate($PL_SUBJ_ID, $date)
 		foreach ($arr as $row)
 		{
 			//заполняем
+			//TODO заполнять весь интервал от INT_FROM до INT_TO
 			$key =parse_time($row['INT_FROM']);		
 			$full_day[$key]['START_TIME']=parse_time($row['INT_FROM']);
 			$full_day[$key]['END_TIME']=parse_time($row['INT_TO']);
@@ -1560,6 +1657,7 @@ function web_day_generate($PL_SUBJ_ID, $date)
 		foreach ($arr as $row)
 		{
 			//заполняем
+			//TODO заполнять весь интервал от FROM_TIME до TO_TIME
 			$key =parse_time($row['FROM_TIME']);
 			$full_day[$key]['START_TIME']=parse_time($row['FROM_TIME']); 
 			$full_day[$key]['END_TIME']=parse_time($row['TO_TIME']); 
@@ -1573,6 +1671,7 @@ function web_day_generate($PL_SUBJ_ID, $date)
 	//------------------
 	//получаем временное деление сетки DUREE_TRANCHE
 	//TODO get DUREE_TRANCHE for day
+
 	
 	//------------------
 	//получаем записи в расписание за день
