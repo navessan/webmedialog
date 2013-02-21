@@ -335,7 +335,8 @@ function show_plan_xml()
 	
 	//-----------
 	//show department name and check user access
-	$tsql="SELECT PL_PARAM.PL_PARAM_ID, PL_PARAM.NOM , FM_ORG.LABEL ".
+	$tsql="/* show department name and check user access */ ".
+		"SELECT PL_PARAM.PL_PARAM_ID, PL_PARAM.NOM , FM_ORG.LABEL ".
 		"FROM PL_PARAM PL_PARAM ". 
 		"LEFT OUTER JOIN FM_ORG FM_ORG ON FM_ORG.FM_ORG_ID = PL_PARAM.FM_INTORG_ID ". 
 		"JOIN MED_PLPARAM MED_PLPARAM ON PL_PARAM.PL_PARAM_ID = MED_PLPARAM.PL_PARAM_ID ". 
@@ -479,15 +480,17 @@ function show_plsubj()
 	
 	//-----------
 	//show planning name
-	$tsql="select PL_SUBJ.PL_SUBJ_ID, PL_SUBJ.NAME SUBJ_NAME, PL_AGEND_ID1 
-	 , PL_PARAM.PL_PARAM_ID DEP_ID, PL_PARAM.NOM DEP_NAME
-	 , FM_ORG.LABEL ORG_NAME
+	$tsql="/* show planning name */
+	select PL_SUBJ.PL_SUBJ_ID, PL_SUBJ.NAME SUBJ_NAME, PL_AGEND_ID1 
+	 ,PL_PARAM.PL_PARAM_ID DEP_ID, PL_PARAM.NOM DEP_NAME
+	 ,FM_ORG.LABEL ORG_NAME
 	 from PL_SUBJ
 	 inner join PL_SUBJ_PARAM on PL_SUBJ_PARAM.PL_SUBJ_ID=PL_SUBJ.PL_SUBJ_ID
 	 inner join PL_PARAM PL_PARAM ON PL_PARAM.PL_PARAM_ID=PL_SUBJ_PARAM.PL_PARAM_ID
 	 inner JOIN FM_ORG FM_ORG ON FM_ORG.FM_ORG_ID = PL_PARAM.FM_INTORG_ID
-	 where PL_SUBJ.PL_SUBJ_ID in(".$PL_SUBJ_ID.")
-	 and(PL_SUBJ.ARCHIVE not in (1)) ";
+	 where PL_SUBJ.PL_SUBJ_ID in (".$PL_SUBJ_ID.")
+	 and PL_SUBJ.ARCHIVE not in (1)
+	 and PL_PARAM.ARCHIVE not in (1)";
 	
 	//print "library_path=".$config["library_path"]."<br>";
 	//print "check_web_access=".$config["check_web_access"]."<br>";
@@ -1437,11 +1440,10 @@ function pl_exam_durees_get($PL_SUBJ_ID)
 
 	$arr = db_fetch_row($tsql);
 
+	$durees=array('MAX_DUREE'=>0, 'MIN_DUREE'=>0);
+	
 	if (sizeof($arr) > 0)
 	{
-		$durees=array('MAX_DUREE'=>0, 
-					'MIN_DUREE'=>0);
-		
 		if(isset($arr['MinTime']))
 		{
 			$durees['MIN_DUREE']=$arr['MinTime'];
@@ -1451,12 +1453,10 @@ function pl_exam_durees_get($PL_SUBJ_ID)
 			$durees['MAX_DUREE']=$arr['MaxTime'];
 		}
 		
-		return $durees;
 	}
-	else
-	{
-		return null;
-	}
+	
+	return $durees;
+	
 }
 
 function pl_exam_show_array($arr)
@@ -1491,6 +1491,69 @@ function pl_exam_show_array($arr)
 	</table>";
 
 	}
+}
+
+/**
+ * заполнение массива заданным событием через указанный интервал
+ * @param array $full_day
+ * @param int $duree_tranche
+ * интервал сетки
+ * @param array $event
+ * событие
+ * @param bool $end_time_of_event
+ * указывать время окончания события, true время события, false - время из сетки
+ * @param bool $debug
+ * print some messages
+ * @return number
+ * -1 if error, or 0 if success
+ */
+function fill_day_array_with_event(&$full_day, $duree_tranche, $event, $end_time_of_event=false, $debug=false)
+{
+	//TODO check input arrays
+	$start_time =parse_time($event['START_TIME']);
+	$end_time =parse_time($event['END_TIME']);
+
+	$duree_tranche;
+
+	if($debug)
+	{
+		echo "\n duree_tranche=".$duree_tranche;
+		//echo "\n duree_tranche=".date(DATE_ATOM, strtotime($duree_tranche));
+		echo "\n cur_time=".date(DATE_ATOM, strtotime($start_time));
+		echo "\n end_time=".date(DATE_ATOM, strtotime($end_time));
+		echo "\n event=";
+		print_r($event);
+	}
+
+	if(!(//strtotime($duree_tranche)>0
+		$duree_tranche>0
+			& strtotime($start_time)>0
+			& strtotime($end_time)>0))
+		return -1;
+
+	$cur_time=$start_time;
+
+	while(($duree_tranche>0)&(strtotime($cur_time)<strtotime($end_time)))
+	{
+		$key =$cur_time;
+		$full_day[$key]['START_TIME']=$cur_time;
+		if($end_time_of_event)
+			$full_day[$key]['END_TIME']=$end_time;
+		else 
+			$full_day[$key]['END_TIME']=add_time($cur_time,$duree_tranche);
+		$full_day[$key]['DUREE']=$duree_tranche;
+		$full_day[$key]['TYPE']=$event['TYPE'];
+		/*if(strlen($full_day[$key]['NAME'])>0)
+			$full_day[$key]['NAME'].=$event['NAME'];
+		else */
+			$full_day[$key]['NAME']=$event['NAME'];
+		$full_day[$key]['COLOR']=$event['COLOR'];
+		$full_day[$key]['WEB_ACCESS']=$event['WEB_ACCESS'];
+
+		$cur_time =add_time($cur_time,$duree_tranche);
+	}
+
+	return 0;
 }
 
 function web_day_generate($PL_SUBJ_ID, $date)
@@ -1568,6 +1631,7 @@ function web_day_generate($PL_SUBJ_ID, $date)
 	else
 	{
 		$full_day[]['NAME']="Нет приема";
+		$full_day[$key]['WEB_ACCESS']='closed';
 		//print "<br>Нет доступа к сетке расписаниям<br>";
 		//выходим сразу или получаем остальные события дня?
 		return $full_day;
@@ -1593,29 +1657,22 @@ function web_day_generate($PL_SUBJ_ID, $date)
 			$duree_tranche=$durees['MIN_DUREE'];
 	}
 	
+	//TODO взять интервал сетки из модели
+	
 	
 	$start_time =parse_time($row['START_TIME']);
 	$end_time =parse_time($row['END_TIME']);
 	
-	$cur_time=$start_time;
+	$day_row['START_TIME']=$start_time;
+	$day_row['END_TIME']=$end_time;
+	$day_row['DUREE']=$duree_tranche;
+	$day_row['TYPE']='free';
+	$day_row['NAME']='свободно';
+	$day_row['COLOR']='green';
+	$day_row['WEB_ACCESS']=1;
 	
-	echo "\n duree_tranche=".date(DATE_ATOM, strtotime($duree_tranche));
-	echo "\n cur_time=".date(DATE_ATOM, strtotime($cur_time));
-	echo "\n end_time=".date(DATE_ATOM, strtotime($end_time));
-	
-	while(($duree_tranche>0)&(strtotime($cur_time)<strtotime($end_time)))
-	{
-		$key =$cur_time;
-		$full_day[$key]['START_TIME']=$cur_time;
-		$full_day[$key]['END_TIME']=add_time($cur_time,$duree_tranche);
-		$full_day[$key]['DUREE']=$duree_tranche;
-		$full_day[$key]['TYPE']='';
-		$full_day[$key]['NAME']="Свободно";
-		$full_day[$key]['COLOR']='';
-		$full_day[$key]['WEB_ACCESS']='';
-		
-		$cur_time =add_time($cur_time,$duree_tranche);
-	}
+	if(fill_day_array_with_event($full_day, $duree_tranche, $day_row, false, false)<0)
+		echo 'error with event:\n'.print_r($day_row);
 	
 	
 	//------------------
@@ -1631,16 +1688,16 @@ function web_day_generate($PL_SUBJ_ID, $date)
 		
 		foreach ($arr as $row)
 		{
-			//заполняем
-			//TODO заполнять весь интервал от INT_FROM до INT_TO
-			$key =parse_time($row['INT_FROM']);		
-			$full_day[$key]['START_TIME']=parse_time($row['INT_FROM']);
-			$full_day[$key]['END_TIME']=parse_time($row['INT_TO']);
-			$full_day[$key]['DUREE']='';
-			$full_day[$key]['TYPE']=''; 
-			$full_day[$key]['NAME']=$row['NAME'];
-			$full_day[$key]['COLOR']=delphi_color_to_html($row['COLOR']);
-			$full_day[$key]['WEB_ACCESS']='';
+			$day_row['START_TIME']=$row['INT_FROM'];
+			$day_row['END_TIME']=$row['INT_TO'];
+			$day_row['DUREE']=$duree_tranche;
+			$day_row['TYPE']='plan event';
+			$day_row['NAME']=$row['NAME'];
+			$day_row['COLOR']=delphi_color_to_html($row['COLOR']);
+			$day_row['WEB_ACCESS']=2;
+			
+			if(fill_day_array_with_event($full_day, $duree_tranche, $day_row, true, false)<0)
+				echo 'error with event:\n'.print_r($day_row);
 		}
 	}
 
@@ -1656,22 +1713,18 @@ function web_day_generate($PL_SUBJ_ID, $date)
 		
 		foreach ($arr as $row)
 		{
-			//заполняем
-			//TODO заполнять весь интервал от FROM_TIME до TO_TIME
-			$key =parse_time($row['FROM_TIME']);
-			$full_day[$key]['START_TIME']=parse_time($row['FROM_TIME']); 
-			$full_day[$key]['END_TIME']=parse_time($row['TO_TIME']); 
-			$full_day[$key]['DUREE']='';
-			$full_day[$key]['TYPE']=''; 
-			$full_day[$key]['NAME']=$row['NAME'];
-			$full_day[$key]['COLOR']=delphi_color_to_html($row['COLOR']);
-			$full_day[$key]['WEB_ACCESS']='';
+			$day_row['START_TIME']=parse_time($row['FROM_TIME']); 
+			$day_row['END_TIME']=parse_time($row['TO_TIME']); 
+			$day_row['DUREE']='';
+			$day_row['TYPE']=''; 
+			$day_row['NAME']=$row['NAME'];
+			$day_row['COLOR']=delphi_color_to_html($row['COLOR']);
+			$day_row['WEB_ACCESS']='';
+			
+			if(fill_day_array_with_event($full_day, $duree_tranche, $day_row, true, false)<0)
+				echo 'error with event:\n'.print_r($day_row);
 		}
 	}
-	//------------------
-	//получаем временное деление сетки DUREE_TRANCHE
-	//TODO get DUREE_TRANCHE for day
-
 	
 	//------------------
 	//получаем записи в расписание за день
@@ -1686,13 +1739,16 @@ function web_day_generate($PL_SUBJ_ID, $date)
 		foreach ($arr as $row)
 		{
 			$key =parse_time($row['HEURE']);
-			$full_day[$key]['START_TIME']=parse_time($row['HEURE']); 
-			$full_day[$key]['END_TIME']=add_time($row['HEURE'],$row['DUREE']); 
-			$full_day[$key]['DUREE']=$row['DUREE'];
-			$full_day[$key]['TYPE']=''; 
-			$full_day[$key]['NAME']=$row['NAME']." ".$row['NOM']." ".$row['PRENOM']." ".$row['PATRONYME']." ".$row['COMMENTAIRE'];
-			$full_day[$key]['COLOR']=delphi_color_to_html($row['COLOR']);
-			$full_day[$key]['WEB_ACCESS']='';
+			$day_row['START_TIME']=parse_time($row['HEURE']); 
+			$day_row['END_TIME']=add_time($row['HEURE'],$row['DUREE']); 
+			$day_row['DUREE']=$row['DUREE'];
+			$day_row['TYPE']='patient'; 
+			$day_row['NAME']=$row['NAME']." ".$row['NOM']." ".$row['PRENOM']." ".$row['PATRONYME']." ".$row['COMMENTAIRE'];
+			$day_row['COLOR']=delphi_color_to_html($row['COLOR']);
+			$day_row['WEB_ACCESS']='close';
+			
+			if(fill_day_array_with_event($full_day, $duree_tranche, $day_row, true, false)<0)
+				echo 'error with event:\n'.print_r($day_row);
 		}
 			
 	}	
