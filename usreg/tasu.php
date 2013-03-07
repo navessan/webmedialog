@@ -32,6 +32,10 @@ error_reporting(E_ALL);
 /* Include configuration */
 include("config.php");
 
+//override config file
+$database_hostname = "oms-srv";
+$database_default = "PDPRegStorage";
+
 
 /* Display errors. */
 function FormatErrors( $errors )
@@ -148,48 +152,9 @@ array("sql"=>"series","name"=>"Серия полиса","value"=>"","html"=>"<br>","type"=>
 array("sql"=>"number","name"=>"Номер полиса","value"=>"","type"=>"text")
 );
 
-$month_array=array(
-array("sql"=>"0811","name"=>"август 2011"),
-array("sql"=>"0911","name"=>"сентябрь 2011"),
-array("sql"=>"1011","name"=>"октябрь 2011")
-);
+echo 'Версия регистра: '.get_usreg_version($conn).'<br>';
 
-echo '<form method=post>
-	<select name="month">';
-
-//выбор текущего месяца
-$sql_month='0911';
-
-$get_month=get_request_var_post("month");
-$get_month=sanitize_search_string($get_month);
-$month_selected_flag=false;
-
-echo '<br>'.$get_month.'<br>';
-for ($i=0;$i<count($month_array);$i++)
-{
-	echo '<option ';
-	
-	//select month from user request	
-	if($get_month==$month_array[$i]['sql'])
-	{
-		echo 'selected ';
-		$sql_month=$month_array[$i]['sql'];
-		$month_selected_flag=true;
-	}
-	else 
-	//select last month if no user request
-	if(!$month_selected_flag &($i==(count($month_array)-1)))
-	{
-		echo 'selected ';
-		$sql_month=$month_array[$i]['sql'];
-	}
-	
-	echo 'value="'.$month_array[$i]['sql'].'">';
-	echo $month_array[$i]['name'].'</option>';
-}
-	
-echo '</select>';
-//echo 'Всего записей:'.get_month_records_count($conn, $sql_month).'<br>';
+echo '<form method=post>';
 
 //вывод полей для поиска с заполнением значений
 for($i=0;$i<count($fields_search_array);$i++)
@@ -335,12 +300,53 @@ end polis_s_bit
 --,'|' '|',cmo_obl.*
 --,'|' '|',tersmo.*
 
-FROM usreg$sql_month usreg
+FROM usreg usreg
 left outer join atd on substring(usreg.region,1,5)=substring(atd.okato,1,5)
 left outer join atd atd_r on substring(usreg.region,1,2)+'000000000'=atd_r.okato
 left outer join cmo_obl on (usreg.code_msk=cmo_obl.cod_cmo and rtrim(cmo_obl.q_ogrn)<>'')
 left outer join tersmo on (cmo_obl.q_ogrn=tersmo.q_ogrn and tersmo.c_t=50)
 --left outer join numoms0811 numoms on (usreg.series=numoms.series and usreg.number=numoms.number)";
+
+//--------------------------------------
+$tsql = "SELECT top $top_count
+[ENP]
+      ,[SERIES]
+      ,[NUMBER]
+      ,[CODE_MSK]
+      ,[FAM]
+      ,[IM]
+      ,[OT]
+      ,[BIRTHDAY]
+      ,[SEX]
+      ,[REGION]
+      ,[DATE_N]
+      ,[DATE_E]
+      ,[DSTOP]
+      ,[SS]
+   /*   ,[K1]
+      ,[K2]
+      ,[K3]
+      ,[K4]
+      ,[K5]
+   */   
+  ,atd.name addrss
+   ,smo.ShortName Q_NAME
+      ,case
+when date_e<getdate() then 'истек с '+convert(varchar, date_e, 104)
+when dstop<getdate() then 'погашен с '+convert(varchar, dstop, 104)
+else 'действующий'
+end polis_s
+,case
+when date_e<getdate() or dstop<getdate() then 0
+else 1
+end polis_s_bit
+  FROM [ut].[ut_PolReg_UsReg] usreg
+  left join [PDPAccStorage].[dbo].[vw_omssmo_45307] smo on code_msk=code
+  left join [PDPStdStorage].[dbo].[NSI_OKATO_insert] atd on 
+  				substring(usreg.region,1,8)+'000'=atd.okato and atd.disabled=0 and atd.razdel=1
+
+";
+
 
 if(strlen($sql_where)>0)
 	$tsql.="\n where ".$sql_where;
@@ -401,9 +407,9 @@ if(sqlsrv_has_rows($stmt))
 		if($row['polis_s_bit']==1)
 			$rowColor='Green';
 		else
-		if ($row['polis_s_bit']==0)
+			if ($row['polis_s_bit']==0)
 			$rowColor='Red';
-		else 
+		else
 			$rowColor='White';
 		print '<tr bgcolor="' . $rowColor . '">';
 		
@@ -413,7 +419,7 @@ if(sqlsrv_has_rows($stmt))
 		{
 			$text='';
 			
-			if (gettype($field)=="object" && get_class($field)=="DateTime")
+			if (gettype($field)=="object" && (get_class($field)=="DateTime"))
 			{
     			$text = $field->format('Y-m-d');
     			if($text=='1899-12-30')
@@ -421,7 +427,7 @@ if(sqlsrv_has_rows($stmt))
 			}
 			else
 				$text = trim($field);
-			
+				
 			if($text=='') 
 				$text ='&nbsp'; 
 			
@@ -436,12 +442,41 @@ if(sqlsrv_has_rows($stmt))
 sqlsrv_free_stmt( $stmt);
 sqlsrv_close( $conn);
 
+//TODO remove or remake
 function get_month_records_count($conn, $month)
 {
 	if(!strlen($month)>0)
 	return -1;
 
-	$tsql="select count(fam) from usreg".$month;
+	$tsql="select count(fam) from usreg";
+
+	$stmt = sqlsrv_query($conn, $tsql);
+
+	if( $stmt === false)
+	{
+		echo "Error in query preparation/execution.\n";
+		die( FormatErrors( sqlsrv_errors() ) );
+	}
+
+	if(sqlsrv_has_rows($stmt))
+	{
+		/* Retrieve each row as an associative array and display the results.*/
+		while( $row = sqlsrv_fetch_array( $stmt, SQLSRV_FETCH_ASSOC))
+		{
+			foreach ($row as $field)
+			{
+				return $field;
+			}
+		}
+	}
+	/* Free statement and connection resources. */
+	sqlsrv_free_stmt( $stmt);
+}
+
+function get_usreg_version($conn)
+{
+
+	$tsql="SELECT [OtPer] FROM [PDPRegStorage].[ut].[ut_PolReg_Version]";
 
 	$stmt = sqlsrv_query($conn, $tsql);
 
