@@ -1,0 +1,1 @@
+PHP web gui for special medical database system. Helps to automate different medical and administrative routines.
